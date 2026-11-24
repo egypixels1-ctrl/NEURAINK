@@ -44,9 +44,9 @@ public sealed class LetterLibrary
 
     public string Folder { get; }
 
-    public LetterLibrary(string dataPath)
+    public LetterLibrary(string folder)
     {
-        Folder = Path.Combine(dataPath, "letters");
+        Folder = folder;
         try { Directory.CreateDirectory(Folder); } catch { }
     }
 

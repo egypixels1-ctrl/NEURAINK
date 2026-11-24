@@ -33,8 +33,8 @@ jobs:
           New-Item -ItemType Directory -Force shots | Out-Null
           $cfg = Join-Path $env:APPDATA 'NEURAINK'
           New-Item -ItemType Directory -Force $cfg | Out-Null
-          $lib = Join-Path $PWD 'demo\library'
-          $data = Join-Path $env:RUNNER_TEMP 'NEURAINK Data'
+          $db = Join-Path $env:RUNNER_TEMP 'NEURAINK Database'
+          Copy-Item -Recurse -Force demo\database $db
           function Shot($name) {
             $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
             $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -43,7 +43,7 @@ jobs:
             $bmp.Save((Join-Path $PWD "shots\$name.png"))
           }
           function Run($lang, $theme, $page, $name) {
-            $s = @{ Language = $lang; Theme = $theme; Accent = '#7C5CFF'; LibraryPath = $lib; DataPath = $data; Style = 'ديواني'; ShowOriginal = $true; AppearanceOpen = $true }
+            $s = @{ Language = $lang; Theme = $theme; Accent = '#7C5CFF'; DatabasePath = $db; Style = 'ديواني'; ShowOriginal = $true; AppearanceOpen = $true }
             $s | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $cfg 'settings.json') -Encoding utf8
             $p = if ($page) { Start-Process publish\NEURAINK.exe -ArgumentList @('--page', $page) -PassThru } else { Start-Process publish\NEURAINK.exe -PassThru }
             Start-Sleep -Seconds 12
@@ -66,7 +66,7 @@ jobs:
           Run 'English' 'Dark'  'annotate-demo'  '10-annotate-en'
           Run 'English' 'Light' 'settings'       '11-settings-en-light'
           Run 'English' 'Dark'  'colorpicker'    '12-colorpicker'
-          Get-ChildItem -Recurse $data | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+          Get-ChildItem -Recurse $db | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
 
       - name: Upload screenshots
         continue-on-error: true

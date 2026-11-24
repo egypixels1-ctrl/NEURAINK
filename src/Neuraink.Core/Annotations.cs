@@ -40,9 +40,9 @@ public sealed class AnnotationStore
     public string Folder { get; }
     private readonly Dictionary<int, string> _states = [];
 
-    public AnnotationStore(string dataPath)
+    public AnnotationStore(string folder)
     {
-        Folder = Path.Combine(dataPath, "annotations");
+        Folder = folder;
         try
         {
             Directory.CreateDirectory(Folder);

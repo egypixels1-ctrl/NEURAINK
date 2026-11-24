@@ -24,30 +24,23 @@ public sealed class AppSettings
     /// <summary>Settings › Appearance: the accent colour part is open.</summary>
     public bool AppearanceOpen { get; set; } = true;
 
-    /// <summary>Folder made by the triage tool (contains report.csv, clean_png, svg, thumbs).</summary>
-    public string LibraryPath { get; set; } = "";
-    /// <summary>Workspace: annotations and the letter library.</summary>
-    public string DataPath { get; set; } = "";
+    /// <summary>The NEURAINK Database folder (library, annotations, letters, models, engine).</summary>
+    public string DatabasePath { get; set; } = "";
+    /// <summary>Older versions: the library and workspace folders (read once to fill DatabasePath).</summary>
+    public string? LibraryPath { get; set; }
+    public string? DataPath { get; set; }
     /// <summary>Script style recorded with every segmented letter.</summary>
     public string Style { get; set; } = "ديواني";
     /// <summary>Show a small picture of the original while segmenting.</summary>
     public bool ShowOriginal { get; set; } = true;
 
-    /// <summary>Fills empty paths with sensible defaults (the D:\CalligraphyAI layout when it exists).</summary>
+    /// <summary>Settings of older versions: the folder that held the library becomes the database folder.</summary>
     public void FillDefaults()
     {
-        if (string.IsNullOrWhiteSpace(LibraryPath))
-        {
-            var guess = @"D:\CalligraphyAI\diwani";
-            if (Directory.Exists(guess)) LibraryPath = guess;
-        }
-        if (string.IsNullOrWhiteSpace(DataPath))
-        {
-            var root = !string.IsNullOrWhiteSpace(LibraryPath) && Directory.GetParent(LibraryPath) is { } p
-                ? p.FullName
-                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            DataPath = Path.Combine(root, "NEURAINK Data");
-        }
+        if (string.IsNullOrWhiteSpace(DatabasePath) && !string.IsNullOrWhiteSpace(LibraryPath) && Directory.GetParent(LibraryPath) is { } p)
+            DatabasePath = p.FullName;
+        LibraryPath = null;
+        DataPath = null;
     }
 }
 

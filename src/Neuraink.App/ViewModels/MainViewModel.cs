@@ -23,6 +23,7 @@ public sealed partial class MainViewModel : ObservableObject
     public static MainViewModel? Current { get; private set; }
 
     public AppSettings Settings { get; }
+    public NeurainkDatabase Database { get; private set; } = null!;
     public Library Library { get; private set; } = null!;
     public AnnotationStore Annotations { get; private set; } = null!;
     public LetterLibrary Letters { get; private set; } = null!;
@@ -73,9 +74,10 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>(Re)opens the library, the annotations and the letter library from the paths in Settings.</summary>
     public void LoadData()
     {
-        Library = new Library(Settings.LibraryPath);
-        Annotations = new AnnotationStore(Settings.DataPath);
-        Letters = new LetterLibrary(Settings.DataPath);
+        Database = new NeurainkDatabase(Settings.DatabasePath);
+        Library = new Library(Database.LibraryFolder(Settings.Style));
+        Annotations = new AnnotationStore(Database.IsSet ? Database.AnnotationsFolder : "");
+        Letters = new LetterLibrary(Database.IsSet ? Database.LettersFolder : "");
     }
 
     public void ReloadAll()
@@ -85,6 +87,7 @@ public sealed partial class MainViewModel : ObservableObject
         LibraryPage.Reload();
         Dashboard.Refresh();
         LettersPage.Refresh();
+        SettingsPage?.RefreshDatabase();
     }
 
     public void RefreshCounts()
@@ -119,6 +122,27 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Annotate.Open(id, remember: true);
         Go(Annotate);
+    }
+
+    /// <summary>
+    /// Settings / Dashboard: pick the NEURAINK Database folder. A folder that is not a complete database is completed
+    /// (only the missing folders and files are created, like the Database folder of DEEPMATH).
+    /// </summary>
+    public bool ChooseDatabase()
+    {
+        if (Dialogs.PickFolder(Database.Exists ? Database.Root : null) is not { } folder) return false;
+        var db = new NeurainkDatabase(folder);
+        var missing = db.Missing();
+        if (missing.Count > 0)
+        {
+            if (!Dialogs.Confirm(Loc.F("Db.Missing", string.Join("\n", missing)))) return false;
+            try { db.CreateMissing(); }
+            catch (Exception ex) { Dialogs.Error(ex.Message); return false; }
+        }
+        Settings.DatabasePath = db.Root;
+        SaveSettings();
+        ReloadAll();
+        return true;
     }
 
     public void SaveSettings()

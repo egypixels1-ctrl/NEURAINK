@@ -9,14 +9,17 @@ A Windows app that learns Arabic calligraphy from a library of professional piec
 4. **Neural networks** — encoder, generator, layout and critic, trained on the letter library and on the user's choices.
 5. **Illustrator output** — pure black on pure white AI files.
 
-## Folders
+## NEURAINK Database
+One folder holds everything (Settings › NEURAINK Database, like the entity Database folder of DEEPMATH).
+Choosing a folder that is not a complete database creates only the missing parts.
 ```
-<Library>\            made by tools/diwani_triage.py
-  report.csv  clean_png\  svg\  thumbs\
-<Workspace>\          (Settings › Workspace folder, default "NEURAINK Data" next to the library)
-  annotations\00042.json        the segmentation of piece 42
-  letters\0645\00042_01.png     a cut-out of «م» (transparent PNG)
-  letters\0645\00042_01.json    its form, joins, polygons, source
+NEURAINK Database\
+  Library\ديواني\              report.csv, clean_png\, svg\, thumbs\  (tools/diwani_triage.py, one folder per script style)
+  Annotations\00042.json        the segmentation of piece 42
+  Letters\0645\00042_01.png     a cut-out of «م» (transparent PNG) + 00042_01.json (form, joins, polygons, source)
+  Models\                       trained neural networks
+  Engine\                       the AI engine
+  .neuraink\database.json
 ```
 
 ## App

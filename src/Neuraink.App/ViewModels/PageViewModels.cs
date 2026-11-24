@@ -38,6 +38,7 @@ public sealed partial class DashboardViewModel(MainViewModel main) : ObservableO
     [ObservableProperty] private string _pieces = "0";
     [ObservableProperty] private string _hallOfFame = "0";
     [ObservableProperty] private bool _libraryMissing;
+    [ObservableProperty] private bool _databaseMissing;
     [ObservableProperty] private bool _noLetters = true;
     public ObservableCollection<CoverageRow> Coverage { get; } = [];
     public ObservableCollection<RoadmapStep> Roadmap { get; } = [];
@@ -46,7 +47,8 @@ public sealed partial class DashboardViewModel(MainViewModel main) : ObservableO
     public void Refresh()
     {
         var lib = main.Library;
-        LibraryMissing = !lib.Found;
+        DatabaseMissing = !main.Database.Exists;
+        LibraryMissing = main.Database.Exists && !lib.Found;
         Usable = lib.Items.Count.ToString("N0");
         Texts = lib.Items.Select(i => i.Text).Distinct().Count().ToString("N0");
         Segmented = main.Annotations.CountSegmented.ToString("N0");
@@ -64,14 +66,7 @@ public sealed partial class DashboardViewModel(MainViewModel main) : ObservableO
 
     [RelayCommand] private void Continue() => main.Go(main.Annotate);
 
-    [RelayCommand]
-    private void BrowseLibrary()
-    {
-        if (Dialogs.PickFolder(main.Settings.LibraryPath) is not { } folder) return;
-        main.Settings.LibraryPath = folder;
-        main.SaveSettings();
-        main.ReloadAll();
-    }
+    [RelayCommand] private void ChooseDatabase() => main.ChooseDatabase();
 }
 
 // ====================================================================== Library
@@ -261,8 +256,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isLight;
     [ObservableProperty] private bool _useWindowsAccent;
     [ObservableProperty] private bool _appearanceOpen;
-    [ObservableProperty] private string _libraryPath = "";
-    [ObservableProperty] private string _dataPath = "";
+    [ObservableProperty] private string _databasePath = "";
+    [ObservableProperty] private bool _databaseOk;
+    [ObservableProperty] private bool _databaseIncomplete;
+    [ObservableProperty] private string _databaseStatus = "";
+    [ObservableProperty] private string _libraryStatus = "";
     [ObservableProperty] private string _style = "";
     [ObservableProperty] private bool _showOriginal;
     public string AccentHex { get; private set; } = "";
@@ -276,8 +274,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         IsArabic = s.Language == AppLanguage.Arabic;
         IsLight = s.Theme == AppTheme.Light;
         AppearanceOpen = s.AppearanceOpen;
-        LibraryPath = s.LibraryPath;
-        DataPath = s.DataPath;
+        RefreshDatabase();
         Style = s.Style;
         ShowOriginal = s.ShowOriginal;
         LoadAccent();
@@ -362,33 +359,44 @@ public sealed partial class SettingsViewModel : ObservableObject
         _main.SaveSettings();
     }
 
-    [RelayCommand]
-    private void BrowseLibrary()
+    /// <summary>Path, completeness and library of the database (shown in Settings › Database).</summary>
+    public void RefreshDatabase()
     {
-        if (Dialogs.PickFolder(LibraryPath) is not { } f) return;
-        LibraryPath = f;
-        _main.Settings.LibraryPath = f;
-        _main.SaveSettings();
-        _main.ReloadAll();
+        var db = _main.Database;
+        DatabasePath = db.IsSet ? db.Root : Loc.T("Db.NotSet");
+        DatabaseOk = db.IsComplete;
+        DatabaseIncomplete = db.Exists && !db.IsComplete;
+        DatabaseStatus = !db.IsSet ? Loc.T("Db.NotSet") : !db.Exists ? Loc.T("Db.NotFound")
+            : db.IsComplete ? Loc.T("Db.Ok") : Loc.F("Db.Incomplete", string.Join("  ", db.Missing()));
+        var lib = _main.Library;
+        LibraryStatus = lib.Found ? Loc.F("Db.LibraryAt", lib.Items.Count.ToString("N0"), lib.Folder) : Loc.T("Db.NoLibrary");
     }
 
     [RelayCommand]
-    private void BrowseData()
+    private void ChangeDatabase()
     {
-        if (Dialogs.PickFolder(DataPath) is not { } f) return;
-        DataPath = f;
-        _main.Settings.DataPath = f;
-        _main.SaveSettings();
-        _main.ReloadAll();
+        _main.ChooseDatabase();
+        RefreshDatabase();
     }
 
-    [RelayCommand] private void OpenData() => Shell.ShowInFolder(_main.Settings.DataPath);
+    [RelayCommand]
+    private void CreateMissing()
+    {
+        try { _main.Database.CreateMissing(); }
+        catch (Exception ex) { Dialogs.Error(ex.Message); }
+        _main.ReloadAll();
+        RefreshDatabase();
+    }
+
+    [RelayCommand] private void OpenDatabase() { if (_main.Database.Exists) Shell.ShowInFolder(_main.Database.Root); }
+    [RelayCommand] private void OpenLibrary() { if (_main.Library.Found) Shell.ShowInFolder(_main.Library.Folder); }
 
     [RelayCommand]
     private void SaveStyle()
     {
         _main.Settings.Style = (Style ?? "").Trim();
         _main.SaveSettings();
-        _main.Dashboard.Refresh();
+        _main.ReloadAll();
+        RefreshDatabase();
     }
 }

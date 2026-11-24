@@ -28,6 +28,67 @@
                 <TextBlock Text="{DynamicResource Nav.Settings}" Style="{StaticResource PageTitle}" />
             </StackPanel>
 
+            <!-- ========== NEURAINK Database (like the entity Database folder of DEEPMATH) ========== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <StackPanel>
+                    <TextBlock Text="{DynamicResource Db.Title}" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                    <TextBlock Text="{DynamicResource Db.Hint}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,12" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Margin="8,0,0,0" Command="{Binding ChangeDatabaseCommand}" Style="{DynamicResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="12" Margin="0,0,8,0" />
+                                <TextBlock Text="{DynamicResource Db.Change}" />
+                            </StackPanel>
+                        </Button>
+                        <Button DockPanel.Dock="Right" Margin="8,0,0,0" Command="{Binding OpenDatabaseCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="12" Margin="0,0,8,0" />
+                                <TextBlock Text="{DynamicResource Common.Open}" />
+                            </StackPanel>
+                        </Button>
+                        <Grid Width="18" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="13" Foreground="{StaticResource GoodBrush}"
+                                       Visibility="{Binding DatabaseOk, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="13" Foreground="{StaticResource WarnBrush}"
+                                       Visibility="{Binding DatabaseOk, Converter={StaticResource InverseBoolToVis}}" />
+                        </Grid>
+                        <TextBlock Text="{Binding DatabasePath}" FontWeight="SemiBold" VerticalAlignment="Center" FlowDirection="LeftToRight"
+                                   HorizontalAlignment="Left" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <DockPanel Margin="26,8,0,0">
+                        <Button DockPanel.Dock="Right" Content="{DynamicResource Db.Create}" Command="{Binding CreateMissingCommand}" Margin="8,0,0,0"
+                                Visibility="{Binding DatabaseIncomplete, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Text="{Binding DatabaseStatus}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <DockPanel Margin="26,6,0,0">
+                        <Button DockPanel.Dock="Right" Command="{Binding OpenLibraryCommand}" Padding="8,4" Margin="8,0,0,0" ToolTip="{DynamicResource Common.Open}">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="12" />
+                        </Button>
+                        <TextBlock Text="{Binding LibraryStatus}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+
+                    <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,14,0,0">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="200" />
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{DynamicResource Set.Style}" />
+                                    <TextBlock Text="{DynamicResource Set.StyleS}" Style="{StaticResource Muted}" FontSize="11.5" />
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Text="{Binding Style, UpdateSourceTrigger=PropertyChanged}" FlowDirection="RightToLeft" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Button Grid.Column="2" Command="{Binding SaveStyleCommand}" Content="{DynamicResource Common.Save}" VerticalAlignment="Center" />
+                            </Grid>
+                            <CheckBox Content="{DynamicResource Set.Original}" IsChecked="{Binding ShowOriginal}" Margin="0,12,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
             <!-- ========== Appearance ========== -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,14">
                 <StackPanel>
@@ -109,58 +170,6 @@
                             </Button>
                         </StackPanel>
                     </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- ========== Library ========== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
-                <StackPanel>
-                    <TextBlock Text="{DynamicResource Set.Library}" Style="{StaticResource SectionTitle}" />
-                    <Grid Margin="0,4,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="200" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Set.LibPath}" />
-                            <TextBlock Text="{DynamicResource Set.LibPathS}" Style="{StaticResource Muted}" FontSize="11.5" />
-                        </StackPanel>
-                        <TextBox Grid.Column="1" Text="{Binding LibraryPath, Mode=OneWay}" IsReadOnly="True" FlowDirection="LeftToRight" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Button Grid.Column="2" Command="{Binding BrowseLibraryCommand}" Content="{DynamicResource Common.Browse}" VerticalAlignment="Center" />
-                    </Grid>
-                    <Grid Margin="0,4,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="200" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Set.DataPath}" />
-                            <TextBlock Text="{DynamicResource Set.DataPathS}" Style="{StaticResource Muted}" FontSize="11.5" />
-                        </StackPanel>
-                        <TextBox Grid.Column="1" Text="{Binding DataPath, Mode=OneWay}" IsReadOnly="True" FlowDirection="LeftToRight" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Button Grid.Column="2" Command="{Binding BrowseDataCommand}" Content="{DynamicResource Common.Browse}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <Button Grid.Column="3" Command="{Binding OpenDataCommand}" VerticalAlignment="Center" ToolTip="{DynamicResource Common.Open}" Padding="9,6">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="13" />
-                        </Button>
-                    </Grid>
-                    <Grid Margin="0,4,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="200" />
-                            <ColumnDefinition Width="220" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Set.Style}" />
-                            <TextBlock Text="{DynamicResource Set.StyleS}" Style="{StaticResource Muted}" FontSize="11.5" />
-                        </StackPanel>
-                        <TextBox Grid.Column="1" Text="{Binding Style, UpdateSourceTrigger=PropertyChanged}" FlowDirection="RightToLeft" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Button Grid.Column="2" Command="{Binding SaveStyleCommand}" Content="{DynamicResource Common.Save}" VerticalAlignment="Center" />
-                    </Grid>
-                    <CheckBox Content="{DynamicResource Set.Original}" IsChecked="{Binding ShowOriginal}" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>
 

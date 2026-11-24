@@ -17,10 +17,24 @@
                 </StackPanel>
             </DockPanel>
 
-            <!-- library not found -->
+            <!-- no database yet / library not found -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14" Visibility="{Binding DatabaseMissing, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Command="{Binding ChooseDatabaseCommand}" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock Text="{DynamicResource Db.Choose}" />
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE1D3;" FontSize="22" Foreground="{DynamicResource BrandBrush}" Margin="0,0,14,0" />
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Db.Welcome}" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="{DynamicResource Db.Hint}" Style="{StaticResource Muted}" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
             <Border Style="{StaticResource Card}" Margin="0,0,0,14" Visibility="{Binding LibraryMissing, Converter={StaticResource BoolToVis}}">
                 <DockPanel>
-                    <Button DockPanel.Dock="Right" Command="{Binding BrowseLibraryCommand}" Content="{DynamicResource Dash.ChooseLib}" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Center" />
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="22" Foreground="{StaticResource WarnBrush}" Margin="0,0,14,0" />
                     <StackPanel>
                         <TextBlock Text="{DynamicResource Dash.NoLib}" FontWeight="SemiBold" FontSize="15" />

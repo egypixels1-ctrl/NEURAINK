@@ -28,7 +28,7 @@
     <sys:String x:Key="Dash.NoLetters">لم تُقطّع حروف بعد. ابدأ بالأسماء الأكثر تكرارًا مثل «محمد».</sys:String>
     <sys:String x:Key="Dash.Roadmap">مراحل المشروع</sys:String>
     <sys:String x:Key="Dash.NoLib">لم يُعثر على المكتبة</sys:String>
-    <sys:String x:Key="Dash.NoLibHint">اختر المجلد الناتج من أداة الفرز (فيه report.csv).</sys:String>
+    <sys:String x:Key="Dash.NoLibHint">ضع ناتج أداة الفرز داخل مجلد Library في قاعدة البيانات (مثلًا Library\ديواني).</sys:String>
     <sys:String x:Key="Dash.ChooseLib">اختيار مجلد المكتبة</sys:String>
     <sys:String x:Key="Road.1">فرز المكتبة وتنظيفها</sys:String>
     <sys:String x:Key="Road.1s">PNG و SVG لكل مخطوطة صالحة</sys:String>
@@ -123,4 +123,17 @@
     <sys:String x:Key="Color.Current">الحالي (اضغط للرجوع له)</sys:String>
     <sys:String x:Key="Color.Palette">الألوان</sys:String>
     <sys:String x:Key="Color.Recent">الأخيرة</sys:String>
+    <sys:String x:Key="Db.Title">قاعدة بيانات NEURAINK</sys:String>
+    <sys:String x:Key="Db.Hint">مجلد واحد يضم كل شيء: المكتبة، والتقطيعات، ومكتبة الحروف، والنماذج، والمحرك.</sys:String>
+    <sys:String x:Key="Db.Change">تغيير المجلد</sys:String>
+    <sys:String x:Key="Db.Choose">اختيار مجلد قاعدة البيانات</sys:String>
+    <sys:String x:Key="Db.Welcome">اختر مجلد قاعدة بيانات NEURAINK</sys:String>
+    <sys:String x:Key="Db.Create">إنشاء الناقص</sys:String>
+    <sys:String x:Key="Db.NotSet">لم يتم اختيار مجلد قاعدة البيانات</sys:String>
+    <sys:String x:Key="Db.NotFound">المجلد غير موجود</sys:String>
+    <sys:String x:Key="Db.Ok">قاعدة بيانات كاملة</sys:String>
+    <sys:String x:Key="Db.Incomplete">الناقص: {0}</sys:String>
+    <sys:String x:Key="Db.LibraryAt">المكتبة: {0} مخطوطة — {1}</sys:String>
+    <sys:String x:Key="Db.NoLibrary">لا توجد مكتبة بعد: ضع ناتج أداة الفرز داخل Library\&lt;نوع الخط&gt; (مثلًا Library\ديواني).</sys:String>
+    <sys:String x:Key="Db.Missing">هذا المجلد ليس قاعدة بيانات NEURAINK كاملة. الناقص:&#x0a;&#x0a;{0}&#x0a;&#x0a;هل تريد استخدامه؟ سيتم إنشاء المجلدات والملفات الناقصة فقط (لن يُستبدل أي ملف).</sys:String>
 </ResourceDictionary>

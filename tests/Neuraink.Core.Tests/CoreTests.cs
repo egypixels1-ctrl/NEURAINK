@@ -71,13 +71,13 @@ public class LibraryTests
     public void AnnotationRoundTrip()
     {
         var dir = Path.Combine(Path.GetTempPath(), "neuraink-test-" + Guid.NewGuid().ToString("N"));
-        var store = new AnnotationStore(dir);
+        var store = new AnnotationStore(Path.Combine(dir, "annotations"));
         store.Save(new Annotation
         {
             Id = 7, Text = "محمد", State = "done",
             Segments = [new Segment { Kind = "letter", Chip = 0, Letter = "م", Form = "initial", Points = [[1, 2], [3, 4], [5, 6]], Exit = [3, 3] }],
         });
-        var again = new AnnotationStore(dir);
+        var again = new AnnotationStore(Path.Combine(dir, "annotations"));
         Assert.Equal("done", again.State(7));
         var a = again.Load(7)!;
         Assert.Equal("م", a.Segments[0].Letter);
@@ -92,8 +92,60 @@ public class LibraryTests
         Directory.CreateDirectory(Path.Combine(dir, "annotations"));
         File.WriteAllText(Path.Combine(dir, "annotations", "01513.json"),
             "{\"text\":\"سيما\",\"state\":\"done\",\"segments\":[{\"kind\":\"letter\",\"chip\":0,\"letter\":\"س\",\"form\":\"initial\",\"points\":[[100,50],[250,50],[250,300]],\"entry\":null,\"exit\":[240,200]}],\"id\":1513}");
-        var store = new AnnotationStore(dir);
+        var store = new AnnotationStore(Path.Combine(dir, "annotations"));
         Assert.Equal("done", store.State(1513));
         Assert.Equal(new[] { 240.0, 200.0 }, store.Load(1513)!.Segments[0].Exit);
+    }
+}
+
+public class DatabaseTests
+{
+    private static string Temp() => Path.Combine(Path.GetTempPath(), "neuraink-db-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public void CreatesOnlyWhatIsMissing()
+    {
+        var root = Temp();
+        Directory.CreateDirectory(Path.Combine(root, "Letters"));
+        File.WriteAllText(Path.Combine(root, "Letters", "keep.txt"), "x");
+        var db = new NeurainkDatabase(root);
+        Assert.Contains("Library\\", db.Missing());
+        Assert.DoesNotContain("Letters\\", db.Missing());
+        db.CreateMissing();
+        Assert.True(db.IsComplete);
+        Assert.Equal("x", File.ReadAllText(Path.Combine(root, "Letters", "keep.txt")));
+    }
+
+    [Fact]
+    public void FindsTheLibraryOfAStyle()
+    {
+        var root = Temp();
+        var db = new NeurainkDatabase(root);
+        db.CreateMissing();
+        var style = Path.Combine(root, "Library", "ديواني");
+        Directory.CreateDirectory(style);
+        File.WriteAllText(Path.Combine(style, "report.csv"), "id\n");
+        Assert.Equal(style, db.LibraryFolder("ديواني"));
+        Assert.Equal(style, db.LibraryFolder("ثلث"));   // only style: used
+        Assert.Equal(new[] { "ديواني" }, db.Styles());
+    }
+
+    [Fact]
+    public void FindsAnOlderLibraryNextToIt()
+    {
+        var root = Temp();
+        var old = Path.Combine(root, "diwani");
+        Directory.CreateDirectory(old);
+        File.WriteAllText(Path.Combine(old, "report.csv"), "id\n");
+        Assert.Equal(old, new NeurainkDatabase(root).LibraryFolder("ديواني"));
+    }
+
+    [Fact]
+    public void OldSettingsBecomeADatabase()
+    {
+        var s = new AppSettings { LibraryPath = @"C:\CalligraphyAI\diwani" };
+        s.FillDefaults();
+        Assert.Equal(@"C:\CalligraphyAI", s.DatabasePath);
+        Assert.Null(s.LibraryPath);
     }
 }

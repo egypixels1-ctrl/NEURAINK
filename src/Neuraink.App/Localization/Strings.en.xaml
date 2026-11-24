@@ -28,7 +28,7 @@
     <sys:String x:Key="Dash.NoLetters">No letters segmented yet. Start with the most frequent names, like «محمد».</sys:String>
     <sys:String x:Key="Dash.Roadmap">Roadmap</sys:String>
     <sys:String x:Key="Dash.NoLib">Library not found</sys:String>
-    <sys:String x:Key="Dash.NoLibHint">Choose the folder made by the triage tool (it contains report.csv).</sys:String>
+    <sys:String x:Key="Dash.NoLibHint">Put the triage tool output in the database's Library folder (for example Library\ديواني).</sys:String>
     <sys:String x:Key="Dash.ChooseLib">Choose library folder</sys:String>
     <sys:String x:Key="Road.1">Library triage &amp; cleanup</sys:String>
     <sys:String x:Key="Road.1s">PNG + SVG for every usable piece</sys:String>
@@ -123,4 +123,17 @@
     <sys:String x:Key="Color.Current">Current (click to go back to it)</sys:String>
     <sys:String x:Key="Color.Palette">Colors</sys:String>
     <sys:String x:Key="Color.Recent">Recent</sys:String>
+    <sys:String x:Key="Db.Title">NEURAINK Database</sys:String>
+    <sys:String x:Key="Db.Hint">One folder holds everything: the library, the segmentations, the letter library, the models and the engine.</sys:String>
+    <sys:String x:Key="Db.Change">Change folder</sys:String>
+    <sys:String x:Key="Db.Choose">Choose database folder</sys:String>
+    <sys:String x:Key="Db.Welcome">Choose the NEURAINK Database folder</sys:String>
+    <sys:String x:Key="Db.Create">Create missing parts</sys:String>
+    <sys:String x:Key="Db.NotSet">No database folder chosen</sys:String>
+    <sys:String x:Key="Db.NotFound">Folder not found</sys:String>
+    <sys:String x:Key="Db.Ok">Complete database</sys:String>
+    <sys:String x:Key="Db.Incomplete">Missing: {0}</sys:String>
+    <sys:String x:Key="Db.LibraryAt">Library: {0} pieces — {1}</sys:String>
+    <sys:String x:Key="Db.NoLibrary">No library yet: put the triage tool output in Library\&lt;style&gt; (e.g. Library\ديواني).</sys:String>
+    <sys:String x:Key="Db.Missing">This folder is not a complete NEURAINK database. Missing:&#x0a;&#x0a;{0}&#x0a;&#x0a;Use it? Only the missing folders and files are created (nothing is replaced).</sys:String>
 </ResourceDictionary>
