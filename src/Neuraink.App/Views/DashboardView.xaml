@@ -1,0 +1,146 @@
+<UserControl x:Class="Neuraink.App.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <!-- header -->
+            <DockPanel Margin="0,0,0,18">
+                <Button DockPanel.Dock="Right" Command="{Binding ContinueCommand}" Style="{DynamicResource AccentButtonStyle}" Padding="16,8" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="12" Margin="0,0,8,0" />
+                        <TextBlock Text="{DynamicResource Dash.Continue}" />
+                    </StackPanel>
+                </Button>
+                <StackPanel>
+                    <TextBlock Text="{DynamicResource Nav.Dashboard}" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                </StackPanel>
+            </DockPanel>
+
+            <!-- library not found -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14" Visibility="{Binding LibraryMissing, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Command="{Binding BrowseLibraryCommand}" Content="{DynamicResource Dash.ChooseLib}" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Center" />
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="22" Foreground="{StaticResource WarnBrush}" Margin="0,0,14,0" />
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.NoLib}" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="{DynamicResource Dash.NoLibHint}" Style="{StaticResource Muted}" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- stats -->
+            <UniformGrid Columns="5" Margin="-6,0,-6,8">
+                <Border Style="{StaticResource HeroCard}" Margin="6">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="{DynamicResource SystemAccentColorDark1}" Offset="0" />
+                            <GradientStop Color="{DynamicResource SystemAccentColorLight1}" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Usable}" Foreground="#E6FFFFFF" />
+                        <TextBlock Text="{Binding Usable}" Style="{StaticResource StatValue}" Foreground="White" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="6">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Texts}" Style="{StaticResource Muted}" />
+                        <TextBlock Text="{Binding Texts}" Style="{StaticResource StatValue}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="6">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Segmented}" Style="{StaticResource Muted}" />
+                        <TextBlock Text="{Binding Segmented}" Style="{StaticResource StatValue}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="6">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Pieces}" Style="{StaticResource Muted}" />
+                        <TextBlock Text="{Binding Pieces}" Style="{StaticResource StatValue}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="6">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Hof}" Style="{StaticResource Muted}" />
+                        <TextBlock Text="{Binding HallOfFame}" Style="{StaticResource StatValue}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.4*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- letter coverage -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Coverage}" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                        <TextBlock Text="{DynamicResource Dash.CoverageHint}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,14" />
+                        <TextBlock Text="{DynamicResource Dash.NoLetters}" Style="{StaticResource Muted}" Margin="0,20" HorizontalAlignment="Center" TextAlignment="Center"
+                                   Visibility="{Binding NoLetters, Converter={StaticResource BoolToVis}}" />
+                        <ItemsControl ItemsSource="{Binding Coverage}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="38" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Letter}" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <ProgressBar Grid.Column="1" Value="{Binding Percent}" Style="{StaticResource SlimBar}" Height="8" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Text}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right" FlowDirection="LeftToRight" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- roadmap -->
+                <Border Grid.Column="2" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Dash.Roadmap}" Style="{StaticResource SectionTitle}" />
+                        <ItemsControl ItemsSource="{Binding Roadmap}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,6">
+                                        <Grid Width="28" Height="28" Margin="0,0,12,0" VerticalAlignment="Top">
+                                            <Ellipse x:Name="Dot" Stroke="{DynamicResource ControlStrokeColorDefaultBrush}" StrokeThickness="1.5" />
+                                            <TextBlock x:Name="Num" Text="{Binding Number}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock x:Name="Tick" Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="12" Foreground="White"
+                                                       HorizontalAlignment="Center" Visibility="Collapsed" />
+                                        </Grid>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Title}" FontSize="14" />
+                                            <TextBlock Text="{Binding Sub}" Style="{StaticResource Muted}" FontSize="12" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Done}" Value="True">
+                                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource BrandBrush}" />
+                                            <Setter TargetName="Dot" Property="Stroke" Value="{DynamicResource BrandBrush}" />
+                                            <Setter TargetName="Num" Property="Visibility" Value="Collapsed" />
+                                            <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Now}" Value="True">
+                                            <Setter TargetName="Dot" Property="Stroke" Value="{DynamicResource BrandBrush}" />
+                                            <Setter TargetName="Num" Property="Foreground" Value="{DynamicResource BrandBrush}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

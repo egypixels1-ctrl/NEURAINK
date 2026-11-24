@@ -1,0 +1,106 @@
+<UserControl x:Class="Neuraink.App.Views.LibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel>
+        <!-- header -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
+            <TextBlock Text="{DynamicResource Nav.Library}" Style="{StaticResource PageTitle}" />
+            <TextBlock Text="{Binding CountText}" Style="{StaticResource Muted}" />
+        </StackPanel>
+
+        <!-- toolbar -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,14" Orientation="Horizontal">
+            <Grid Width="320" Margin="0,0,12,6">
+                <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=250}" Padding="34,6,10,6" VerticalContentAlignment="Center" />
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE721;" FontSize="13" Margin="12,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False" Opacity="0.6" />
+                <TextBlock Text="{DynamicResource Lib.Search}" Margin="36,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Opacity="0.5">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Search}" Value="">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+            <Border Style="{StaticResource Card}" Padding="10,4" Margin="0,0,12,6" CornerRadius="8">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Content="{DynamicResource Lib.All}" GroupName="libf" Margin="0,0,14,0" MinWidth="0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter=all}" />
+                    <RadioButton Content="{DynamicResource Lib.Todo}" GroupName="libf" Margin="0,0,14,0" MinWidth="0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter=todo}" />
+                    <RadioButton Content="{DynamicResource Lib.Done}" GroupName="libf" Margin="0,0,14,0" MinWidth="0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter=done}" />
+                    <RadioButton Content="{DynamicResource Lib.Rejected}" GroupName="libf" MinWidth="0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter=rejected}" />
+                </StackPanel>
+            </Border>
+            <CheckBox Content="{DynamicResource Lib.Single}" IsChecked="{Binding SingleWord}" Margin="0,0,12,6" VerticalAlignment="Center" />
+            <ComboBox SelectedIndex="{Binding SortIndex}" Width="170" Margin="0,0,0,6" VerticalAlignment="Center">
+                <ComboBoxItem Content="{DynamicResource Lib.SortFreq}" />
+                <ComboBoxItem Content="{DynamicResource Lib.SortBest}" />
+                <ComboBoxItem Content="{DynamicResource Lib.SortFile}" />
+            </ComboBox>
+        </WrapPanel>
+
+        <Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <ItemsControl ItemsSource="{Binding Tiles}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                        Template="{StaticResource BareButton}" Cursor="Hand" Margin="0,0,12,12">
+                                    <Border x:Name="Tile" Width="176" Style="{StaticResource Card}" Padding="0" ClipToBounds="True">
+                                        <StackPanel>
+                                            <Grid Height="160" Background="{StaticResource PaperBrush}">
+                                                <Image Source="{Binding Image}" Margin="12" RenderOptions.BitmapScalingMode="HighQuality" />
+                                                <Border Style="{StaticResource Pill}" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{DynamicResource BrandBrush}" BorderThickness="0"
+                                                        Visibility="{Binding IsBest, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE735;" FontSize="10" Foreground="White" />
+                                                </Border>
+                                            </Grid>
+                                            <DockPanel Margin="10,8">
+                                                <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" x:Name="BadgeBox">
+                                                    <TextBlock Text="{Binding Badge}" FontSize="10.5" x:Name="BadgeText" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FlowDirection="RightToLeft" HorizontalAlignment="Left" />
+                                            </DockPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                        <Setter TargetName="BadgeBox" Property="BorderBrush" Value="{StaticResource GoodBrush}" />
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{StaticResource GoodBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsRejected}" Value="True">
+                                        <Setter TargetName="BadgeBox" Property="BorderBrush" Value="{StaticResource BadBrush}" />
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{StaticResource BadBrush}" />
+                                    </DataTrigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+                                    </Trigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="{DynamicResource Lib.More}" Command="{Binding LoadMoreCommand}" HorizontalAlignment="Center" Margin="0,8,0,16" Padding="18,7"
+                            Visibility="{Binding HasMore, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </ScrollViewer>
+            <TextBlock Text="{DynamicResource Lib.Empty}" Style="{StaticResource Muted}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding LibraryMissing, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{DynamicResource Dash.NoLib}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="{DynamicResource Dash.NoLibHint}" Style="{StaticResource Muted}" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </DockPanel>
+</UserControl>

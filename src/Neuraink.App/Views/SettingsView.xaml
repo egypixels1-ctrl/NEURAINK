@@ -1,0 +1,184 @@
+<UserControl x:Class="Neuraink.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <!-- an accent colour square: ring + tick when selected -->
+        <ControlTemplate x:Key="SwatchButton" TargetType="Button">
+            <Grid Width="40" Height="40" Margin="0,0,4,4" Cursor="Hand" Background="Transparent">
+                <Border x:Name="Sq" Background="{Binding Brush}" CornerRadius="5" />
+                <Border x:Name="Ring" BorderBrush="{DynamicResource TextFillColorPrimaryBrush}" BorderThickness="2" CornerRadius="5" Visibility="Collapsed" />
+                <TextBlock x:Name="Tick" Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="White"
+                           HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,5,0" Visibility="Collapsed" />
+            </Grid>
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="Ring" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Sq" Property="Opacity" Value="0.85" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="860" HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" FontSize="22" Margin="0,0,12,0" />
+                <TextBlock Text="{DynamicResource Nav.Settings}" Style="{StaticResource PageTitle}" />
+            </StackPanel>
+
+            <!-- ========== Appearance ========== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Command="{Binding ToggleAppearanceCommand}" Padding="8,5" VerticalAlignment="Top"
+                                ToolTip="{DynamicResource Set.Accent}">
+                            <TextBlock FontSize="12">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                        <Setter Property="Text" Value="&#xE70D;" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AppearanceOpen}" Value="True">
+                                                <Setter Property="Text" Value="&#xE70E;" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button>
+                        <TextBlock Text="{DynamicResource Set.Appearance}" Style="{StaticResource SectionTitle}" />
+                    </DockPanel>
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{DynamicResource Set.Language}" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <RadioButton Content="English" IsChecked="{Binding IsArabic, Converter={StaticResource InverseBool}}" GroupName="lang" Margin="0,0,20,0" />
+                            <RadioButton Content="العربية" IsChecked="{Binding IsArabic}" GroupName="lang" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Margin="0,10,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{DynamicResource Set.Theme}" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <RadioButton Content="{DynamicResource Set.Dark}" IsChecked="{Binding IsLight, Converter={StaticResource InverseBool}}" GroupName="theme" Margin="0,0,20,0" />
+                            <RadioButton Content="{DynamicResource Set.Light}" IsChecked="{Binding IsLight}" GroupName="theme" />
+                        </StackPanel>
+                    </Grid>
+                    <!-- accent colour (like Windows "Choose your accent color") -->
+                    <Grid Margin="0,14,0,4" Visibility="{Binding AppearanceOpen, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{DynamicResource Set.Accent}" VerticalAlignment="Top" Margin="0,4,0,0" />
+                        <StackPanel Grid.Column="1">
+                            <CheckBox Content="{DynamicResource Set.AccentAuto}" IsChecked="{Binding UseWindowsAccent}" Margin="0,0,0,10" />
+                            <TextBlock Text="{DynamicResource Set.AccentRecent}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,6"
+                                       Visibility="{Binding HasRecentAccents, Converter={StaticResource BoolToVis}}" />
+                            <ItemsControl ItemsSource="{Binding RecentAccents}" Margin="0,0,0,12" Visibility="{Binding HasRecentAccents, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Command="{Binding DataContext.PickAccentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                Template="{StaticResource SwatchButton}" ToolTip="{Binding Hex}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{DynamicResource Set.AccentColors}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,6" />
+                            <ItemsControl ItemsSource="{Binding AccentPalette}" HorizontalAlignment="Left">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Command="{Binding DataContext.PickAccentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                Template="{StaticResource SwatchButton}" ToolTip="{Binding Hex}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Command="{Binding CustomAccentCommand}" HorizontalAlignment="Left" Margin="0,12,0,0" Padding="10,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" FontSize="12" Margin="0,0,8,0" />
+                                    <TextBlock Text="{DynamicResource Set.AccentCustom}" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ========== Library ========== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <StackPanel>
+                    <TextBlock Text="{DynamicResource Set.Library}" Style="{StaticResource SectionTitle}" />
+                    <Grid Margin="0,4,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource Set.LibPath}" />
+                            <TextBlock Text="{DynamicResource Set.LibPathS}" Style="{StaticResource Muted}" FontSize="11.5" />
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Text="{Binding LibraryPath, Mode=OneWay}" IsReadOnly="True" FlowDirection="LeftToRight" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button Grid.Column="2" Command="{Binding BrowseLibraryCommand}" Content="{DynamicResource Common.Browse}" VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid Margin="0,4,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource Set.DataPath}" />
+                            <TextBlock Text="{DynamicResource Set.DataPathS}" Style="{StaticResource Muted}" FontSize="11.5" />
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Text="{Binding DataPath, Mode=OneWay}" IsReadOnly="True" FlowDirection="LeftToRight" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button Grid.Column="2" Command="{Binding BrowseDataCommand}" Content="{DynamicResource Common.Browse}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <Button Grid.Column="3" Command="{Binding OpenDataCommand}" VerticalAlignment="Center" ToolTip="{DynamicResource Common.Open}" Padding="9,6">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="13" />
+                        </Button>
+                    </Grid>
+                    <Grid Margin="0,4,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource Set.Style}" />
+                            <TextBlock Text="{DynamicResource Set.StyleS}" Style="{StaticResource Muted}" FontSize="11.5" />
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Text="{Binding Style, UpdateSourceTrigger=PropertyChanged}" FlowDirection="RightToLeft" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button Grid.Column="2" Command="{Binding SaveStyleCommand}" Content="{DynamicResource Common.Save}" VerticalAlignment="Center" />
+                    </Grid>
+                    <CheckBox Content="{DynamicResource Set.Original}" IsChecked="{Binding ShowOriginal}" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- ========== About ========== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <StackPanel Orientation="Horizontal">
+                    <Image Source="pack://application:,,,/NEURAINK;component/Assets/neuraink.png" Width="52" Height="52" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,14,0" />
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="NEURAINK" FontWeight="Bold" FontSize="16" />
+                            <Border Style="{StaticResource Pill}" Margin="10,0,0,0">
+                                <TextBlock Text="{Binding Version}" FontSize="11" FlowDirection="LeftToRight" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{DynamicResource App.Tagline}" Style="{StaticResource Muted}" Margin="0,2,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,79 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <SolidColorBrush x:Key="BrandBrush" Color="#7C5CFF" />
+    <SolidColorBrush x:Key="BrandSoftBrush" Color="#7C5CFF" Opacity="0.16" />
+    <SolidColorBrush x:Key="GoodBrush" Color="#2EA043" />
+    <SolidColorBrush x:Key="WarnBrush" Color="#D29922" />
+    <SolidColorBrush x:Key="BadBrush" Color="#E5534B" />
+    <SolidColorBrush x:Key="PaperBrush" Color="#FFFFFF" />
+
+    <Style x:Key="Icon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <!-- icons must not be mirrored in Arabic -->
+        <Setter Property="FlowDirection" Value="LeftToRight" />
+    </Style>
+    <Style x:Key="PageTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+    <Style x:Key="Muted" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+    <!-- the highlighted stat card: accent gradient -->
+    <Style x:Key="HeroCard" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style x:Key="StatValue" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+    <!-- small rounded label -->
+    <Style x:Key="Pill" TargetType="Border">
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- a flat button that shows only its content (tiles, chips, swatches) -->
+    <ControlTemplate x:Key="BareButton" TargetType="Button">
+        <Border Background="Transparent">
+            <ContentPresenter />
+        </Border>
+    </ControlTemplate>
+    <!-- a slim progress bar in the accent colour -->
+    <Style x:Key="SlimBar" TargetType="ProgressBar">
+        <Setter Property="Height" Value="6" />
+        <Setter Property="Minimum" Value="0" />
+        <Setter Property="Maximum" Value="100" />
+    </Style>
+    <!-- keyboard key -->
+    <Style x:Key="Kbd" TargetType="Border">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="BorderThickness" Value="1,1,1,2" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="Padding" Value="5,0" />
+        <Setter Property="Margin" Value="0,2" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="FlowDirection" Value="LeftToRight" />
+    </Style>
+</ResourceDictionary>
