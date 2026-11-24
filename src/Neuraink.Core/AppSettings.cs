@@ -53,7 +53,7 @@ public sealed class AppSettings
             DatabasePath = p.FullName;
         LibraryPath = null;
         DataPath = null;
-        if (Brushes.Count == 0) Brushes = BrushTip.Defaults();
+        if (Brushes.Count == 0) { Brushes = BrushTip.Defaults(); BrushIndex = 6; }   // start on the 70° calligraphic nib
         BrushIndex = Math.Clamp(BrushIndex, 0, Brushes.Count - 1);
         Brush = null;
     }

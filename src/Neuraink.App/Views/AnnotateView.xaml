@@ -31,7 +31,7 @@
                     </StackPanel>
                 </Button>
             </StackPanel>
-            <StackPanel DockPanel.Dock="Left" MaxWidth="420">
+            <StackPanel DockPanel.Dock="Left" MaxWidth="360">
                 <TextBlock Text="{DynamicResource Nav.Annotate}" Style="{StaticResource PageTitle}" />
                 <TextBlock Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
                     <Run Text="{Binding Title, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding FileInfo, Mode=OneWay}" />
@@ -133,7 +133,7 @@
                     </Border>
 
                     <!-- original -->
-                    <Border Width="130" Margin="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" CornerRadius="8" ClipToBounds="True" Padding="4"
+                    <Border Width="130" Margin="12,12,12,70" HorizontalAlignment="Right" VerticalAlignment="Bottom" CornerRadius="8" ClipToBounds="True" Padding="4"
                             Background="{StaticResource PaperBrush}" BorderBrush="#66000000" BorderThickness="2"
                             ToolTip="{DynamicResource Ann.Original}" Opacity="0.95"
                             Visibility="{Binding ShowOriginal, Converter={StaticResource BoolToVis}}">
