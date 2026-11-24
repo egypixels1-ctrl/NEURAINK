@@ -23,6 +23,14 @@ public sealed partial class ChipVm : ObservableObject
     [ObservableProperty] private bool _isDone;
 }
 
+/// <summary>An anchor of the pen tool (Illustrator style): a click makes a corner, a drag pulls out its two handles.</summary>
+public sealed class PenNode
+{
+    public Point A { get; set; }
+    public Point? In { get; set; }
+    public Point? Out { get; set; }
+}
+
 public sealed class SegmentRow
 {
     public required Segment Segment { get; init; }
@@ -71,7 +79,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     // ------------------------------------------------------------------ state
     public LibraryItem? Item { get; private set; }
     public Annotation Ann { get; private set; } = new();
-    public List<Point> Drawing { get; } = [];
+    public List<PenNode> Drawing { get; } = [];
     public List<ToolItem> Tools { get; }
     public ObservableCollection<ChipVm> Chips { get; } = [];
     public ObservableCollection<SegmentRow> Segments { get; } = [];
@@ -255,29 +263,82 @@ public sealed partial class AnnotateViewModel : ObservableObject
             Advance();
             return;
         }
-        if (Drawing.Count >= 3 && (Drawing[0] - p).Length < closeRadius) { CloseShape(); return; }
-        Drawing.Add(p);
+        if (Drawing.Count >= 3 && (Drawing[0].A - p).Length < closeRadius) { CloseShape(); return; }
+        Drawing.Add(new PenNode { A = p });
         Redraw?.Invoke();
+    }
+
+    /// <summary>True when a click at <paramref name="p"/> closes the shape (on the first anchor).</summary>
+    public bool IsOnFirstAnchor(Point p, double radius) => Drawing.Count >= 3 && (Drawing[0].A - p).Length < radius;
+
+    /// <summary>Pen tool: a new anchor (its handles are pulled out by <see cref="DragHandles"/>).</summary>
+    public PenNode? AddAnchor(Point p)
+    {
+        if (Item == null || Tool is "entry" or "exit") return null;
+        var n = new PenNode { A = p };
+        Drawing.Add(n);
+        Redraw?.Invoke();
+        return n;
+    }
+
+    /// <summary>Pen tool: dragging from an anchor makes it smooth — the out handle follows the mouse, the in handle mirrors it.</summary>
+    public void DragHandles(PenNode n, Point to)
+    {
+        n.Out = to;
+        n.In = new Point(2 * n.A.X - to.X, 2 * n.A.Y - to.Y);
+        Redraw?.Invoke();
+    }
+
+    /// <summary>The shape as straight lines (Bézier curves sampled), in picture pixels.</summary>
+    public static List<Point> Flatten(IReadOnlyList<PenNode> nodes, bool closed)
+    {
+        var pts = new List<Point>();
+        int n = nodes.Count;
+        if (n == 0) return pts;
+        int segs = closed ? n : n - 1;
+        pts.Add(nodes[0].A);
+        for (int i = 0; i < segs; i++)
+        {
+            var a = nodes[i]; var b = nodes[(i + 1) % n];
+            if (a.Out == null && b.In == null) { pts.Add(b.A); continue; }
+            Point p0 = a.A, p1 = a.Out ?? a.A, p2 = b.In ?? b.A, p3 = b.A;
+            for (int k = 1; k <= 16; k++)
+            {
+                double t = k / 16.0, u = 1 - t;
+                pts.Add(new Point(
+                    u * u * u * p0.X + 3 * u * u * t * p1.X + 3 * u * t * t * p2.X + t * t * t * p3.X,
+                    u * u * u * p0.Y + 3 * u * u * t * p1.Y + 3 * u * t * t * p2.Y + t * t * t * p3.Y));
+            }
+        }
+        if (closed && pts.Count > 1 && (pts[^1] - pts[0]).Length < 0.01) pts.RemoveAt(pts.Count - 1);
+        return pts;
     }
 
     public void CloseShape()
     {
         if (Drawing.Count < 3) return;
-        var pts = Drawing.Select(d => new[] { Math.Round(d.X, 1), Math.Round(d.Y, 1) }).ToList();
+        var pts = Flatten(Drawing, closed: true).Select(d => new[] { Math.Round(d.X, 1), Math.Round(d.Y, 1) }).ToList();
+        // the pen path itself: anchor x, y, in-handle x, y, out-handle x, y (the vector outline for later)
+        var bez = Drawing.Select(d => new[]
+        {
+            Math.Round(d.A.X, 2), Math.Round(d.A.Y, 2),
+            Math.Round((d.In ?? d.A).X, 2), Math.Round((d.In ?? d.A).Y, 2),
+            Math.Round((d.Out ?? d.A).X, 2), Math.Round((d.Out ?? d.A).Y, 2),
+        }).ToList();
         var c = ChipAt(Active);
-        if (Tool == "exclude") Ann.Segments.Add(new Segment { Kind = "exclude", Points = pts });
+        if (Tool == "exclude") Ann.Segments.Add(new Segment { Kind = "exclude", Points = pts, Bezier = bez });
         else if (c != null && Tool == "letter")
         {
             var old = Body(Active);
             if (old != null) Ann.Segments.Remove(old);
             Ann.Segments.Add(new Segment
             {
-                Kind = "letter", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Points = pts,
+                Kind = "letter", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Points = pts, Bezier = bez,
                 Entry = old?.Entry, Exit = old?.Exit, EntrySkipped = old?.EntrySkipped ?? false, ExitSkipped = old?.ExitSkipped ?? false,
             });
         }
         else if (c != null && Tool == "dots")
-            Ann.Segments.Add(new Segment { Kind = "dots", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Points = pts });
+            Ann.Segments.Add(new Segment { Kind = "dots", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Points = pts, Bezier = bez });
         Drawing.Clear();
         if (Tool == "letter") Advance(); else Refresh();
     }

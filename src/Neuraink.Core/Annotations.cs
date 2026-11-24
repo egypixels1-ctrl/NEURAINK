@@ -11,6 +11,8 @@ public sealed class Segment
     [JsonPropertyName("letter")] public string Letter { get; set; } = "";
     [JsonPropertyName("form")] public string Form { get; set; } = "";
     [JsonPropertyName("points")] public List<double[]> Points { get; set; } = [];
+    /// <summary>The pen path (Illustrator style): per anchor x, y, in-handle x, y, out-handle x, y. Empty for older regions.</summary>
+    [JsonPropertyName("bezier")] public List<double[]>? Bezier { get; set; }
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
     [JsonPropertyName("exit")] public double[]? Exit { get; set; }
     [JsonPropertyName("entrySkipped")] public bool EntrySkipped { get; set; }

@@ -55,7 +55,8 @@ public static class LetterExporter
             {
                 Letter = body.Letter, Form = body.Form, SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File,
                 Style = style, Tier = item.Tier, Chip = body.Chip, BBox = [x0, y0, x1 + 1, y1 + 1],
-                Polygons = group.Select(s => s.Points).ToList(), Entry = body.Entry, Exit = body.Exit, ImageSize = [w, h],
+                Polygons = group.Select(s => s.Points).ToList(),
+                Beziers = group.Where(s => s.Bezier is { Count: > 0 }).Select(s => s.Bezier!).ToList(), Entry = body.Entry, Exit = body.Exit, ImageSize = [w, h],
             });
             count++;
         }

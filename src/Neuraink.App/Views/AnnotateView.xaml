@@ -51,7 +51,7 @@
                     Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                 <Grid>
                     <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                                  PreviewMouseWheel="OnWheel">
+                                  PreviewMouseWheel="OnWheel" PreviewMouseDown="OnPanDown" PreviewMouseMove="OnPanMove" PreviewMouseUp="OnPanUp">
                         <Grid x:Name="Paper" Margin="30" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Grid.LayoutTransform>
                                 <ScaleTransform x:Name="Zoom" ScaleX="1" ScaleY="1" />
@@ -62,7 +62,7 @@
                                 </Border.Effect>
                             </Border>
                             <Image x:Name="Pic" Source="{Binding Image}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" />
-                            <Canvas x:Name="Overlay" Background="Transparent" Cursor="Cross" MouseLeftButtonDown="OnOverlayDown" />
+                            <Canvas x:Name="Overlay" Background="Transparent" Cursor="Pen" MouseLeftButtonDown="OnOverlayDown" MouseMove="OnOverlayMove" MouseLeftButtonUp="OnOverlayUp" />
                         </Grid>
                     </ScrollViewer>
 
@@ -221,22 +221,26 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                 </Grid.RowDefinitions>
-                                <Border Grid.Row="0" Style="{StaticResource Kbd}"><TextBlock Text="Enter" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource Key.Enter}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="1" Style="{StaticResource Kbd}"><TextBlock Text="Backspace" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{DynamicResource Key.Back}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="2" Style="{StaticResource Kbd}"><TextBlock Text="Ctrl+Z" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{DynamicResource Key.Undo}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="3" Style="{StaticResource Kbd}"><TextBlock Text="Tab" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{DynamicResource Key.Tab}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="4" Style="{StaticResource Kbd}"><TextBlock Text="S" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{DynamicResource Key.S}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="5" Style="{StaticResource Kbd}"><TextBlock Text="1 – 5" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{DynamicResource Key.Num}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="6" Style="{StaticResource Kbd}"><TextBlock Text="Ctrl+Wheel" FontSize="11" /></Border>
-                                <TextBlock Grid.Row="6" Grid.Column="1" Text="{DynamicResource Key.Wheel}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="0" Style="{StaticResource Kbd}"><TextBlock Text="Click / Drag" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource Key.Pen}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="1" Style="{StaticResource Kbd}"><TextBlock Text="Space" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{DynamicResource Key.Space}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="2" Style="{StaticResource Kbd}"><TextBlock Text="Enter" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{DynamicResource Key.Enter}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="3" Style="{StaticResource Kbd}"><TextBlock Text="Backspace" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{DynamicResource Key.Back}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="4" Style="{StaticResource Kbd}"><TextBlock Text="Ctrl+Z" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{DynamicResource Key.Undo}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="5" Style="{StaticResource Kbd}"><TextBlock Text="Tab" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{DynamicResource Key.Tab}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="6" Style="{StaticResource Kbd}"><TextBlock Text="S" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="{DynamicResource Key.S}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="7" Style="{StaticResource Kbd}"><TextBlock Text="1 – 5" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="7" Grid.Column="1" Text="{DynamicResource Key.Num}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="8" Style="{StaticResource Kbd}"><TextBlock Text="Ctrl+Wheel" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="8" Grid.Column="1" Text="{DynamicResource Key.Wheel}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </Grid>
                         </StackPanel>
                     </Border>

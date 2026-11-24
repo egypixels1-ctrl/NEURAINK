@@ -77,7 +77,7 @@
     <sys:String x:Key="Tool.entry">Entry point</sys:String>
     <sys:String x:Key="Tool.exit">Exit point</sys:String>
     <sys:String x:Key="Tool.exclude">Ornament / frame / signature</sys:String>
-    <sys:String x:Key="Hint.letter">Outline «{0}» ({1}) point by point, then click the first point or press Enter</sys:String>
+    <sys:String x:Key="Hint.letter">Pen tool around «{0}» ({1}): click for a corner, click-and-drag for a curve; click the first point or press Enter to close</sys:String>
     <sys:String x:Key="Hint.dots">Outline the dots of «{0}» (if any), then Enter — or pick another tool</sys:String>
     <sys:String x:Key="Hint.entry">Click where the join from the previous letter enters «{0}» — Tab to skip</sys:String>
     <sys:String x:Key="Hint.exit">Click where «{0}» joins to the next letter — Tab to skip</sys:String>
@@ -136,4 +136,6 @@
     <sys:String x:Key="Db.LibraryAt">Library: {0} pieces — {1}</sys:String>
     <sys:String x:Key="Db.NoLibrary">No library yet: put the triage tool output in Library\&lt;style&gt; (e.g. Library\ديواني).</sys:String>
     <sys:String x:Key="Db.Missing">This folder is not a complete NEURAINK database. Missing:&#x0a;&#x0a;{0}&#x0a;&#x0a;Use it? Only the missing folders and files are created (nothing is replaced).</sys:String>
+    <sys:String x:Key="Key.Pen">Corner · curve (pen tool)</sys:String>
+    <sys:String x:Key="Key.Space">Hold: hand tool to move the picture</sys:String>
 </ResourceDictionary>

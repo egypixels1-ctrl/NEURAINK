@@ -77,7 +77,7 @@
     <sys:String x:Key="Tool.entry">نقطة الدخول</sys:String>
     <sys:String x:Key="Tool.exit">نقطة الخروج</sys:String>
     <sys:String x:Key="Tool.exclude">زخرفة / إطار / توقيع</sys:String>
-    <sys:String x:Key="Hint.letter">ارسم حول «{0}» ({1}) بالنقر نقطة بعد نقطة، ثم انقر على النقطة الأولى أو اضغط Enter</sys:String>
+    <sys:String x:Key="Hint.letter">أداة القلم حول «{0}» ({1}): نقرة لزاوية، ونقرة مع سحب لمنحنى؛ انقر على النقطة الأولى أو Enter للإغلاق</sys:String>
     <sys:String x:Key="Hint.dots">ارسم حول نقاط «{0}» إن وجدت ثم Enter — أو اختر أداة أخرى</sys:String>
     <sys:String x:Key="Hint.entry">انقر حيث يدخل الاتصال من الحرف السابق إلى «{0}» — Tab للتخطي</sys:String>
     <sys:String x:Key="Hint.exit">انقر حيث يخرج الاتصال من «{0}» إلى الحرف التالي — Tab للتخطي</sys:String>
@@ -136,4 +136,6 @@
     <sys:String x:Key="Db.LibraryAt">المكتبة: {0} مخطوطة — {1}</sys:String>
     <sys:String x:Key="Db.NoLibrary">لا توجد مكتبة بعد: ضع ناتج أداة الفرز داخل Library\&lt;نوع الخط&gt; (مثلًا Library\ديواني).</sys:String>
     <sys:String x:Key="Db.Missing">هذا المجلد ليس قاعدة بيانات NEURAINK كاملة. الناقص:&#x0a;&#x0a;{0}&#x0a;&#x0a;هل تريد استخدامه؟ سيتم إنشاء المجلدات والملفات الناقصة فقط (لن يُستبدل أي ملف).</sys:String>
+    <sys:String x:Key="Key.Pen">زاوية · منحنى (أداة القلم)</sys:String>
+    <sys:String x:Key="Key.Space">اضغط باستمرار: أداة اليد لتحريك الصورة</sys:String>
 </ResourceDictionary>

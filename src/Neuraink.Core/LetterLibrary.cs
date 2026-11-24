@@ -17,6 +17,8 @@ public sealed class LetterMeta
     /// <summary>Crop box in the clean image: left, top, right, bottom (pixels).</summary>
     [JsonPropertyName("bbox")] public int[] BBox { get; set; } = [];
     [JsonPropertyName("polygons")] public List<List<double[]>> Polygons { get; set; } = [];
+    /// <summary>The pen paths of the regions (anchor + handles), when drawn with the pen tool.</summary>
+    [JsonPropertyName("beziers")] public List<List<double[]>>? Beziers { get; set; }
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
     [JsonPropertyName("exit")] public double[]? Exit { get; set; }
     [JsonPropertyName("image_size")] public int[] ImageSize { get; set; } = [];
