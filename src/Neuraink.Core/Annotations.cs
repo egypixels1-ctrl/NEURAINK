@@ -44,6 +44,31 @@ public sealed class Annotation
     [JsonPropertyName("state")] public string State { get; set; } = "";       // done | partial | rejected
     [JsonPropertyName("segments")] public List<Segment> Segments { get; set; } = [];
     [JsonPropertyName("savedAt")] public string SavedAt { get; set; } = "";
+    /// <summary>Data format of this file (see <see cref="DataVersion.Schema"/>).</summary>
+    [JsonPropertyName("schema")] public int Schema { get; set; }
+    /// <summary>NEURAINK version that saved it (its drawing engine: brush geometry, pressure, export).</summary>
+    [JsonPropertyName("engine")] public string Engine { get; set; } = "";
+    /// <summary>train | test — test pieces are never used for training: they measure the model objectively.</summary>
+    [JsonPropertyName("split")] public string Split { get; set; } = "";
+}
+
+/// <summary>Versions written with every saved sample, so samples made by an older engine can be found and re-processed.</summary>
+public static class DataVersion
+{
+    /// <summary>1: polygons (browser version) · 2: + pen Bézier, brush strokes (x, y, pressure, ms), order, tashkeel, versions, split.</summary>
+    public const int Schema = 2;
+    public static string Engine { get; set; } = "0.0.0";
+
+    /// <summary>
+    /// About one piece in ten goes to the test set, chosen by its text (the same name never lands in both sets),
+    /// and stable: the same text always gets the same answer.
+    /// </summary>
+    public static string SplitFor(string text)
+    {
+        uint h = 2166136261;
+        foreach (var c in Arabic.Clean(text ?? "").Replace(" ", "")) { h ^= c; h *= 16777619; }
+        return h % 10 == 0 ? "test" : "train";
+    }
 }
 
 public sealed class AnnotationStore
@@ -79,6 +104,7 @@ public sealed class AnnotationStore
     /// <summary>"" (not segmented), done, partial or rejected.</summary>
     public string State(int id) => _states.GetValueOrDefault(id, "");
     public bool IsSegmented(int id) => State(id) is "done" or "partial";
+    public IEnumerable<int> Ids => _states.Keys;
     public int CountSegmented => _states.Values.Count(s => s is "done" or "partial");
     public int CountRejected => _states.Values.Count(s => s == "rejected");
 
@@ -94,6 +120,9 @@ public sealed class AnnotationStore
     {
         Directory.CreateDirectory(Folder);
         a.SavedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        a.Schema = DataVersion.Schema;
+        a.Engine = DataVersion.Engine;
+        if (string.IsNullOrEmpty(a.Split)) a.Split = DataVersion.SplitFor(a.Text);
         var path = PathOf(a.Id);
         var tmp = path + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(a, Json));

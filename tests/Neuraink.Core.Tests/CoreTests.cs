@@ -149,3 +149,28 @@ public class DatabaseTests
         Assert.Null(s.LibraryPath);
     }
 }
+
+public class VersioningTests
+{
+    [Fact]
+    public void SplitIsStableAndByText()
+    {
+        Assert.Equal(DataVersion.SplitFor("محمد"), DataVersion.SplitFor("مُحَمَّد"));
+        var texts = Enumerable.Range(0, 2000).Select(i => "اسم" + i).ToList();
+        int test = texts.Count(t => DataVersion.SplitFor(t) == "test");
+        Assert.InRange(test, 120, 280);   // about one in ten
+    }
+
+    [Fact]
+    public void SavedSamplesCarryTheirVersions()
+    {
+        DataVersion.Engine = "9.9.9";
+        var dir = Path.Combine(Path.GetTempPath(), "neuraink-v-" + Guid.NewGuid().ToString("N"));
+        var store = new AnnotationStore(dir);
+        store.Save(new Annotation { Id = 1, Text = "محمد", State = "done" });
+        var a = store.Load(1)!;
+        Assert.Equal(DataVersion.Schema, a.Schema);
+        Assert.Equal("9.9.9", a.Engine);
+        Assert.Equal(DataVersion.SplitFor("محمد"), a.Split);
+    }
+}

@@ -152,4 +152,16 @@
     <sys:String x:Key="Key.Shift">While drawing: stay on the same letter</sys:String>
     <sys:String x:Key="Tool.diacritic">Tashkeel (linguistic)</sys:String>
     <sys:String x:Key="Hint.diacritic">Draw the tashkeel of «{0}» (fatha, damma, shadda, sukun …) with the brush</sys:String>
+    <sys:String x:Key="Let.Rebuild">Rebuild letter library</sys:String>
+    <sys:String x:Key="Let.RebuildAsk">Re-make every cut-out from the saved segmentations with this version? Your drawing work is kept; only the cut-outs are made again.</sys:String>
+    <sys:String x:Key="Let.Rebuilt">Done: {0} cut-outs made again.</sys:String>
+    <sys:String x:Key="Let.Outdated">{0} cut-outs were made by an older version</sys:String>
+    <sys:String x:Key="Let.Delete">Delete this cut-out</sys:String>
+    <sys:String x:Key="Let.DeleteAsk">Delete this cut-out? Its letter is removed from the piece's segmentation too, so you can draw it again.</sys:String>
+    <sys:String x:Key="Let.OpenPiece">Open the piece to redo the letter</sys:String>
+    <sys:String x:Key="Let.Test">TEST</sys:String>
+    <sys:String x:Key="Let.TestCount">{0} in the test set</sys:String>
+    <sys:String x:Key="Let.DetailHint">Hover a cut-out: ✎ open its piece · 🗑 delete it</sys:String>
+    <sys:String x:Key="Ann.TestSet">Test set — not for training</sys:String>
+    <sys:String x:Key="Ann.TestSetS">About 1 piece in 10 is kept apart to measure the model fairly</sys:String>
 </ResourceDictionary>

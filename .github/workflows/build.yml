@@ -60,6 +60,7 @@ jobs:
           Run 'Arabic'  'Dark'  'annotate-brush' '03b-annotate-brush-ar'
           Run 'Arabic'  'Dark'  'annotate-save'  '04-annotate-saved-ar'
           Run 'Arabic'  'Dark'  'letters'        '05-letters-ar'
+          Run 'Arabic'  'Dark'  'letters-detail' '05b-letter-detail-ar'
           Run 'Arabic'  'Dark'  $null            '06-dashboard-after-ar'
           Run 'Arabic'  'Dark'  'settings'       '07-settings-ar'
           Run 'English' 'Light' $null            '08-dashboard-en-light'

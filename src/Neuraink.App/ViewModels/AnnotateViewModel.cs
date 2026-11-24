@@ -117,6 +117,12 @@ public sealed partial class AnnotateViewModel : ObservableObject
     [ObservableProperty] private bool _hasItem;
     [ObservableProperty] private bool _nothingLeft;
     [ObservableProperty] private string _toast = "";
+    /// <summary>This piece belongs to the test set: never trained on, used to measure the model.</summary>
+    public bool IsTestSet
+    {
+        get => (string.IsNullOrEmpty(Ann.Split) ? DataVersion.SplitFor(Ann.Text) : Ann.Split) == "test";
+        set { Ann.Split = value ? "test" : "train"; OnPropertyChanged(); }
+    }
     public bool ShowOriginal => _main.Settings.ShowOriginal && Original != null;
 
     /// <summary>Raised when the drawing must be repainted.</summary>
@@ -175,6 +181,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Image = Images.Load(_main.Library.FullPath(item.Png));
         Original = _main.Settings.ShowOriginal ? Images.Load(_main.Library.FullPath(item.Thumb), 320) : null;
         OnPropertyChanged(nameof(ShowOriginal));
+        OnPropertyChanged(nameof(IsTestSet));
         _settingText = true;
         Text = Ann.Text;
         _settingText = false;

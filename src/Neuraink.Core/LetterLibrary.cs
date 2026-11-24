@@ -26,6 +26,20 @@ public sealed class LetterMeta
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
     [JsonPropertyName("exit")] public double[]? Exit { get; set; }
     [JsonPropertyName("image_size")] public int[] ImageSize { get; set; } = [];
+    // ---- dataset versioning
+    [JsonPropertyName("schema")] public int Schema { get; set; } = DataVersion.Schema;
+    [JsonPropertyName("engine")] public string Engine { get; set; } = DataVersion.Engine;
+    /// <summary>How the cut-out was made: brush (rendered from the strokes) or picture (the picture's ink inside the regions).</summary>
+    [JsonPropertyName("source_kind")] public string SourceKind { get; set; } = "picture";
+    [JsonPropertyName("split")] public string Split { get; set; } = "train";
+    [JsonPropertyName("created")] public string Created { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+}
+
+/// <summary>One cut-out on disk (Letter Library › a letter).</summary>
+public sealed class LetterSampleInfo
+{
+    public required string Png { get; init; }
+    public LetterMeta? Meta { get; init; }
 }
 
 public sealed class LetterGroup
@@ -36,6 +50,7 @@ public sealed class LetterGroup
     public Dictionary<string, int> Forms { get; init; } = [];
     /// <summary>Full paths of the cut-outs, newest first.</summary>
     public List<string> Samples { get; init; } = [];
+    public int TestCount { get; init; }
 }
 
 public sealed class LetterLibrary
@@ -78,6 +93,27 @@ public sealed class LetterLibrary
     public void WriteMeta(string pngPath, LetterMeta meta) =>
         File.WriteAllText(Path.ChangeExtension(pngPath, ".json"), JsonSerializer.Serialize(meta, Json));
 
+    public static LetterMeta? ReadMeta(string path)
+    {
+        try { return File.Exists(path) ? JsonSerializer.Deserialize<LetterMeta>(File.ReadAllText(path), Json) : null; }
+        catch { return null; }
+    }
+
+    public static LetterSampleInfo Info(string png) => new() { Png = png, Meta = ReadMeta(Path.ChangeExtension(png, ".json")) };
+
+    /// <summary>Cut-outs made by an older data format or engine (to re-process them).</summary>
+    public int CountOutdated(string engine)
+    {
+        int n = 0;
+        try
+        {
+            foreach (var j in Directory.EnumerateFiles(Folder, "*.json", SearchOption.AllDirectories))
+                if (ReadMeta(j) is { } m && (m.Schema < DataVersion.Schema || m.Engine != engine)) n++;
+        }
+        catch { }
+        return n;
+    }
+
     public List<LetterGroup> Groups()
     {
         var list = new List<LetterGroup>();
@@ -90,17 +126,15 @@ public sealed class LetterLibrary
             var pngs = new DirectoryInfo(dir).GetFiles("*.png").OrderByDescending(f => f.LastWriteTimeUtc).ToList();
             if (pngs.Count == 0) continue;
             var forms = new Dictionary<string, int>();
+            int test = 0;
             foreach (var j in Directory.EnumerateFiles(dir, "*.json"))
             {
-                try
-                {
-                    var m = JsonSerializer.Deserialize<LetterMeta>(File.ReadAllText(j), Json);
-                    var f = m?.Form ?? "";
-                    forms[f] = forms.GetValueOrDefault(f) + 1;
-                }
-                catch { }
+                var m = ReadMeta(j);
+                if (m == null) continue;
+                forms[m.Form] = forms.GetValueOrDefault(m.Form) + 1;
+                if (m.Split == "test") test++;
             }
-            list.Add(new LetterGroup { Letter = letter, Code = code, Count = pngs.Count, Forms = forms, Samples = pngs.Select(f => f.FullName).ToList() });
+            list.Add(new LetterGroup { Letter = letter, Code = code, Count = pngs.Count, Forms = forms, TestCount = test, Samples = pngs.Select(f => f.FullName).ToList() });
         }
         return list.OrderByDescending(g => g.Count).ThenBy(g => g.Letter).ToList();
     }

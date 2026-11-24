@@ -180,19 +180,34 @@ public sealed partial class LetterCard : ObservableObject
     public string Letter => Group.Letter;
     public string Count => Group.Count.ToString("N0");
     public double Percent => Math.Min(100, Group.Count * 100.0 / LetterLibrary.Target);
+    public string TestText => Group.TestCount > 0 ? Loc.F("Let.TestCount", Group.TestCount.ToString("N0")) : "";
     public string Forms => string.Join("  ·  ", Group.Forms.OrderByDescending(f => f.Value).Select(f => $"{Loc.T("Form." + (f.Key.Length > 0 ? f.Key : "isolated"))} {f.Value:N0}"));
     public ObservableCollection<BitmapSource> Samples { get; } = [];
+}
+
+/// <summary>A cut-out in the letter's page: its picture, where it came from, and its set (train / test).</summary>
+public sealed partial class LetterSampleVm : ObservableObject
+{
+    public required LetterSampleInfo Info { get; init; }
+    [ObservableProperty] private BitmapSource? _image;
+    public bool IsTest => Info.Meta?.Split == "test";
+    public bool IsBrush => Info.Meta?.SourceKind == "brush";
+    public string Caption => Info.Meta is { } m ? $"#{m.SourceId}  ·  {Loc.T("Form." + (m.Form.Length > 0 ? m.Form : "isolated"))}" : "";
+    public string Tip => Info.Meta is { } m ? $"{m.SourceText}\n{m.SourceFile}\nv{m.Engine} · schema {m.Schema} · {m.SourceKind} · {m.Split}" : Info.Png;
 }
 
 public sealed partial class LettersViewModel(MainViewModel main) : ObservableObject
 {
     public ObservableCollection<LetterCard> Cards { get; } = [];
-    public ObservableCollection<BitmapSource> Detail { get; } = [];
+    public ObservableCollection<LetterSampleVm> Detail { get; } = [];
     [ObservableProperty] private LetterCard? _selected;
     [ObservableProperty] private bool _isEmpty = true;
+    [ObservableProperty] private string _outdatedText = "";
+    [ObservableProperty] private bool _hasOutdated;
 
     public void Refresh()
     {
+        var keep = Selected?.Letter;
         Cards.Clear();
         Selected = null;
         foreach (var g in main.Letters.Groups())
@@ -207,27 +222,51 @@ public sealed partial class LettersViewModel(MainViewModel main) : ObservableObj
             });
         }
         IsEmpty = Cards.Count == 0;
+        int old = main.Letters.CountOutdated(DataVersion.Engine);
+        HasOutdated = old > 0;
+        OutdatedText = Loc.F("Let.Outdated", old.ToString("N0"));
+        if (keep != null) Selected = Cards.FirstOrDefault(c => c.Letter == keep);
     }
 
     partial void OnSelectedChanged(LetterCard? value)
     {
         Detail.Clear();
         if (value == null) return;
-        var paths = value.Group.Samples.Take(400).ToList();
-        _ = Task.Run(() =>
+        foreach (var p in value.Group.Samples.Take(400))
         {
-            foreach (var p in paths)
+            var vm = new LetterSampleVm { Info = LetterLibrary.Info(p) };
+            Detail.Add(vm);
+            _ = Task.Run(() =>
             {
                 var img = Images.Load(p, 200);
-                if (img == null) continue;
-                Application.Current?.Dispatcher.BeginInvoke(() => { if (Selected == value) Detail.Add(img); });
-            }
-        });
+                if (img != null) Application.Current?.Dispatcher.BeginInvoke(() => vm.Image = img);
+            });
+        }
     }
 
     [RelayCommand] private void Show(LetterCard? card) => Selected = card;
     [RelayCommand] private void Back() => Selected = null;
     [RelayCommand] private void Start() => main.Go(main.Annotate);
+
+    /// <summary>Opens the piece of this cut-out in Letter Segmentation (to redo the letter).</summary>
+    [RelayCommand] private void OpenSource(LetterSampleVm? s) { if (s?.Info.Meta is { } m) main.OpenAnnotate(m.SourceId); }
+
+    [RelayCommand]
+    private void Delete(LetterSampleVm? s)
+    {
+        if (s == null || !Dialogs.Confirm(Loc.T("Let.DeleteAsk"))) return;
+        main.DeleteLetter(s.Info);
+        Refresh();
+    }
+
+    [RelayCommand]
+    private void Rebuild()
+    {
+        if (!Dialogs.Confirm(Loc.T("Let.RebuildAsk"))) return;
+        var n = main.RebuildLetters();
+        Refresh();
+        Dialogs.Info(Loc.F("Let.Rebuilt", n.ToString("N0")));
+    }
 }
 
 // ====================================================================== Settings

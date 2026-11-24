@@ -13,6 +13,8 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += OnUnhandled;
 
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        DataVersion.Engine = $"{v?.Major}.{v?.Minor}.{v?.Build}";
         var settings = SettingsStore.Load();
         ThemeService.Accent = string.IsNullOrWhiteSpace(settings.Accent) ? "auto" : settings.Accent;
         ThemeService.Apply(settings.Theme);
@@ -37,6 +39,10 @@ public partial class App : Application
         {
             case "library": vm.Go(vm.LibraryPage); break;
             case "letters": vm.Go(vm.LettersPage); break;
+            case "letters-detail":
+                vm.Go(vm.LettersPage);
+                Dispatcher.BeginInvoke(() => vm.LettersPage.Selected = vm.LettersPage.Cards.FirstOrDefault(), DispatcherPriority.ContextIdle);
+                break;
             case "settings": vm.Go(vm.SettingsPage); break;
             case "annotate": vm.Go(vm.Annotate); break;
             case "annotate-demo":

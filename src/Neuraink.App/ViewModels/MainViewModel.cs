@@ -145,6 +145,56 @@ public sealed partial class MainViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// Re-makes every cut-out from the saved segmentations with the current engine (after a fix in the brush, the pressure
+    /// or the export): the drawing work is kept, only the letter library is rebuilt.
+    /// </summary>
+    public int RebuildLetters()
+    {
+        int n = 0;
+        foreach (var id in Annotations.Ids.ToList())
+        {
+            if (!Annotations.IsSegmented(id) || Library.Get(id) is not { } item || Annotations.Load(id) is not { } ann) continue;
+            n += LetterExporter.Export(item, ann, Library.FullPath(item.Png), Letters, Settings.Style);
+        }
+        RefreshCounts();
+        return n;
+    }
+
+    /// <summary>
+    /// Deletes a cut-out for good: its regions / strokes leave the segmentation (so a rebuild does not bring it back)
+    /// and the piece is exported again; the letter shows as not done in Letter Segmentation.
+    /// </summary>
+    public void DeleteLetter(LetterSampleInfo info)
+    {
+        if (info.Meta is not { } m) { try { File.Delete(info.Png); } catch { } return; }
+        var ann = Annotations.Load(m.SourceId);
+        bool rewritten = false;
+        if (ann != null)
+        {
+            if (m.Form == "ornament" || m.Chip < 0)
+            {
+                var orders = (m.Strokes ?? new List<Segment>()).Select(x => x.Order).ToHashSet();
+                ann.Segments.RemoveAll(x => x.Kind == "ornament" && orders.Contains(x.Order));
+            }
+            else
+                ann.Segments.RemoveAll(x => x.Chip == m.Chip && x.Kind is "letter" or "dots" or "stroke" or "diacritic");
+            ann.State = ann.Segments.Any(x => x.Kind is "letter" or "stroke") ? "partial" : "";
+            if (ann.State == "") Annotations.Delete(ann.Id);
+            else Annotations.Save(ann);
+            if (Library.Get(m.SourceId) is { } item)
+            {
+                if (ann.State == "") Letters.RemoveSource(item.Id);
+                else LetterExporter.Export(item, ann, Library.FullPath(item.Png), Letters, Settings.Style);
+                rewritten = true;
+            }
+        }
+        if (!rewritten)
+            foreach (var ext in new[] { ".png", ".json", ".svg" })
+                try { var f = Path.ChangeExtension(info.Png, ext); if (File.Exists(f)) File.Delete(f); } catch { }
+        RefreshCounts();
+    }
+
     public void SaveSettings()
     {
         try { SettingsStore.Save(Settings); } catch { }

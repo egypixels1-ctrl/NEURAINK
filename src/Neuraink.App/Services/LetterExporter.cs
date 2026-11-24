@@ -24,6 +24,7 @@ public static class LetterExporter
         gray.CopyPixels(ink, w, 0);
 
         int count = 0;
+        if (string.IsNullOrEmpty(ann.Split)) ann.Split = DataVersion.SplitFor(ann.Text);
 
         // ---- letters drawn with the brush: the cut-out is rendered from the strokes (a smooth vector) + an SVG
         var strokeChips = new HashSet<int>();
@@ -38,7 +39,7 @@ public static class LetterExporter
             letters.WriteMeta(path, new LetterMeta
             {
                 Letter = first.Letter, Form = first.Form, SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File,
-                Style = style, Tier = item.Tier, Chip = first.Chip, FromStrokes = true,
+                Style = style, Tier = item.Tier, Chip = first.Chip, FromStrokes = true, SourceKind = "brush", Split = ann.Split,
                 Strokes = group.Concat(ann.Segments.Where(d => d.Kind == "diacritic" && d.Chip == first.Chip)).OrderBy(d => d.Order).ToList(),
                 BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
                 Entry = body?.Entry, Exit = body?.Exit, ImageSize = [w, h],
@@ -57,7 +58,7 @@ public static class LetterExporter
             letters.WriteMeta(path, new LetterMeta
             {
                 Letter = orn.Letter, Form = orn.Kind == "diacritic" ? orn.Form : "ornament", SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File, Style = style, Tier = item.Tier,
-                Chip = orn.Kind == "diacritic" ? orn.Chip : -1, FromStrokes = true, Strokes = [orn], ImageSize = [w, h],
+                Chip = orn.Kind == "diacritic" ? orn.Chip : -1, FromStrokes = true, Strokes = [orn], ImageSize = [w, h], SourceKind = "brush", Split = ann.Split,
                 BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
             });
         }
@@ -92,7 +93,7 @@ public static class LetterExporter
             letters.WriteMeta(path, new LetterMeta
             {
                 Letter = body.Letter, Form = body.Form, SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File,
-                Style = style, Tier = item.Tier, Chip = body.Chip, BBox = [x0, y0, x1 + 1, y1 + 1],
+                Style = style, Tier = item.Tier, Chip = body.Chip, SourceKind = "picture", Split = ann.Split, BBox = [x0, y0, x1 + 1, y1 + 1],
                 Polygons = group.Select(s => s.Points).ToList(),
                 Beziers = group.Where(s => s.Bezier is { Count: > 0 }).Select(s => s.Bezier!).ToList(), Entry = body.Entry, Exit = body.Exit, ImageSize = [w, h],
             });

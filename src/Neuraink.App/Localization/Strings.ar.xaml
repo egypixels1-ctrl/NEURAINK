@@ -152,4 +152,16 @@
     <sys:String x:Key="Key.Shift">أثناء الرسم: البقاء على نفس الحرف</sys:String>
     <sys:String x:Key="Tool.diacritic">تشكيل لغوي</sys:String>
     <sys:String x:Key="Hint.diacritic">ارسم تشكيل «{0}» بالفرشاة (فتحة، ضمة، شدة، سكون …)</sys:String>
+    <sys:String x:Key="Let.Rebuild">إعادة بناء مكتبة الحروف</sys:String>
+    <sys:String x:Key="Let.RebuildAsk">إعادة صنع كل القصاصات من التقطيعات المحفوظة بهذه النسخة؟ مجهود الرسم محفوظ كما هو؛ فقط القصاصات تُصنع من جديد.</sys:String>
+    <sys:String x:Key="Let.Rebuilt">تم: أُعيد صنع {0} قصاصة.</sys:String>
+    <sys:String x:Key="Let.Outdated">{0} قصاصة صُنعت بنسخة أقدم</sys:String>
+    <sys:String x:Key="Let.Delete">حذف هذه القصاصة</sys:String>
+    <sys:String x:Key="Let.DeleteAsk">حذف هذه القصاصة؟ سيُحذف الحرف من تقطيع المخطوطة أيضًا، لتعيد رسمه لو أردت.</sys:String>
+    <sys:String x:Key="Let.OpenPiece">فتح المخطوطة لإعادة الحرف</sys:String>
+    <sys:String x:Key="Let.Test">اختبار</sys:String>
+    <sys:String x:Key="Let.TestCount">{0} في مجموعة الاختبار</sys:String>
+    <sys:String x:Key="Let.DetailHint">مرّر الماوس على قصاصة: ✎ فتح مخطوطتها · 🗑 حذفها</sys:String>
+    <sys:String x:Key="Ann.TestSet">مجموعة الاختبار — لا يُدرَّب عليها</sys:String>
+    <sys:String x:Key="Ann.TestSetS">حوالي مخطوطة من كل 10 تُحجز لقياس تطور النموذج بموضوعية</sys:String>
 </ResourceDictionary>
