@@ -140,9 +140,9 @@
     <sys:String x:Key="Key.Space">Hold: hand tool to move the picture</sys:String>
     <sys:String x:Key="Tool.brush">Brush</sys:String>
     <sys:String x:Key="Tool.stroke">Brush</sys:String>
-    <sys:String x:Key="Tool.ornament">Ornament / tashkeel</sys:String>
+    <sys:String x:Key="Tool.ornament">Ornament (decoration)</sys:String>
     <sys:String x:Key="Hint.brush">Trace «{0}» ({1}) with the brush over the letter — then the next letter follows (hold Shift to stay, for dots)</sys:String>
-    <sys:String x:Key="Hint.ornament">Draw the tashkeel and ornaments with the brush</sys:String>
+    <sys:String x:Key="Hint.ornament">Draw decorative ornaments with the brush (optional, aesthetic)</sys:String>
     <sys:String x:Key="Brush.Title">Brush</sys:String>
     <sys:String x:Key="Brush.Size">Size</sys:String>
     <sys:String x:Key="Brush.Angle">Angle</sys:String>
@@ -150,4 +150,6 @@
     <sys:String x:Key="Brush.AutoNext">Next letter after each stroke (Shift: stay)</sys:String>
     <sys:String x:Key="Pic.Opacity">Picture opacity</sys:String>
     <sys:String x:Key="Key.Shift">While drawing: stay on the same letter</sys:String>
+    <sys:String x:Key="Tool.diacritic">Tashkeel (linguistic)</sys:String>
+    <sys:String x:Key="Hint.diacritic">Draw the tashkeel of «{0}» (fatha, damma, shadda, sukun …) with the brush</sys:String>
 </ResourceDictionary>

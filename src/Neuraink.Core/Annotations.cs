@@ -16,7 +16,7 @@ public sealed class BrushTip
 /// <summary>A region drawn on a piece: a letter body, its dots, or an ornament / frame / signature to exclude.</summary>
 public sealed class Segment
 {
-    [JsonPropertyName("kind")] public string Kind { get; set; } = "letter";   // letter | dots | exclude | stroke | ornament
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "letter";   // letter | dots | exclude | stroke | diacritic (linguistic tashkeel, per letter) | ornament (decoration)
     [JsonPropertyName("chip")] public int Chip { get; set; } = -1;            // index of the letter in the text
     [JsonPropertyName("letter")] public string Letter { get; set; } = "";
     [JsonPropertyName("form")] public string Form { get; set; } = "";
@@ -25,7 +25,10 @@ public sealed class Segment
     [JsonPropertyName("bezier")] public List<double[]>? Bezier { get; set; }
     /// <summary>Brush strokes (kind stroke / ornament): the tip and the path as x, y, pressure — in the order they were drawn.</summary>
     [JsonPropertyName("brush")] public BrushTip? Brush { get; set; }
+    /// <summary>Raw points as drawn (no smoothing): x, y, pressure (0 = mouse), milliseconds since the stroke began.</summary>
     [JsonPropertyName("stroke")] public List<double[]>? Stroke { get; set; }
+    /// <summary>Brush strokes: their order in the piece (1, 2, 3 …) — the calligrapher's sequence.</summary>
+    [JsonPropertyName("order")] public int Order { get; set; }
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
     [JsonPropertyName("exit")] public double[]? Exit { get; set; }
     [JsonPropertyName("entrySkipped")] public bool EntrySkipped { get; set; }

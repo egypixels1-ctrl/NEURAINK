@@ -292,7 +292,7 @@
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="{DynamicResource Key.Tab}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
                                 <Border Grid.Row="6" Style="{StaticResource Kbd}"><TextBlock Text="S" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="{DynamicResource Key.S}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
-                                <Border Grid.Row="7" Style="{StaticResource Kbd}"><TextBlock Text="1 – 7" FontSize="11" /></Border>
+                                <Border Grid.Row="7" Style="{StaticResource Kbd}"><TextBlock Text="1 – 8" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="7" Grid.Column="1" Text="{DynamicResource Key.Num}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
                                 <Border Grid.Row="9" Style="{StaticResource Kbd}"><TextBlock Text="Shift" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="9" Grid.Column="1" Text="{DynamicResource Key.Shift}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />

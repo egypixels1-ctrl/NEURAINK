@@ -140,9 +140,9 @@
     <sys:String x:Key="Key.Space">اضغط باستمرار: أداة اليد لتحريك الصورة</sys:String>
     <sys:String x:Key="Tool.brush">الفرشاة</sys:String>
     <sys:String x:Key="Tool.stroke">فرشاة</sys:String>
-    <sys:String x:Key="Tool.ornament">زخرفة / تشكيل</sys:String>
+    <sys:String x:Key="Tool.ornament">زخرفة جمالية</sys:String>
     <sys:String x:Key="Hint.brush">ارسم بالفرشاة فوق «{0}» ({1}) — بعدها ينتقل للحرف التالي تلقائيًا (اضغط Shift لتبقى عليه، للنقاط)</sys:String>
-    <sys:String x:Key="Hint.ornament">ارسم التشكيل والزخارف بالفرشاة</sys:String>
+    <sys:String x:Key="Hint.ornament">ارسم الزخارف الجمالية بالفرشاة (اختيارية للتجميل)</sys:String>
     <sys:String x:Key="Brush.Title">الفرشاة</sys:String>
     <sys:String x:Key="Brush.Size">الحجم</sys:String>
     <sys:String x:Key="Brush.Angle">الزاوية</sys:String>
@@ -150,4 +150,6 @@
     <sys:String x:Key="Brush.AutoNext">الانتقال للحرف التالي بعد كل ضربة (Shift للبقاء)</sys:String>
     <sys:String x:Key="Pic.Opacity">شفافية الصورة</sys:String>
     <sys:String x:Key="Key.Shift">أثناء الرسم: البقاء على نفس الحرف</sys:String>
+    <sys:String x:Key="Tool.diacritic">تشكيل لغوي</sys:String>
+    <sys:String x:Key="Hint.diacritic">ارسم تشكيل «{0}» بالفرشاة (فتحة، ضمة، شدة، سكون …)</sys:String>
 </ResourceDictionary>

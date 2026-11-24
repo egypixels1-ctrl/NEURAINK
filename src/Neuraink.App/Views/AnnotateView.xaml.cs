@@ -198,6 +198,9 @@ public partial class AnnotateView : UserControl
             case Key.D3 or Key.NumPad3: _vm.SetToolByKey(3); break;
             case Key.D4 or Key.NumPad4: _vm.SetToolByKey(4); break;
             case Key.D5 or Key.NumPad5: _vm.SetToolByKey(5); break;
+            case Key.D6 or Key.NumPad6: _vm.SetToolByKey(6); break;
+            case Key.D7 or Key.NumPad7: _vm.SetToolByKey(7); break;
+            case Key.D8 or Key.NumPad8: _vm.SetToolByKey(8); break;
             default: return;
         }
         e.Handled = true;
@@ -247,7 +250,7 @@ public partial class AnnotateView : UserControl
         foreach (var s in _vm.Ann.Segments.Where(x => x.Stroke is { Count: > 0 } && x.Brush != null))
         {
             var c = _vm.ColorOf(s);
-            bool on = s.Kind == "ornament" || s.Chip == _vm.Active;
+            bool on = s.Kind is "ornament" or "diacritic" || s.Chip == _vm.Active;
             Overlay.Children.Add(new Shapes.Path
             {
                 Data = StrokeGeometry.Build(s.Stroke!, s.Brush!),
@@ -257,7 +260,7 @@ public partial class AnnotateView : UserControl
         }
         if (_vm.CurrentStroke.Count > 0)
         {
-            var c = _vm.Tool == "ornament" ? AnnotateViewModel.OrnamentColor : AnnotateViewModel.ChipColor(_vm.Active);
+            var c = _vm.BrushColor;
             Overlay.Children.Add(new Shapes.Path
             {
                 Data = StrokeGeometry.Build(_vm.CurrentStroke, _vm.Tip),
@@ -268,7 +271,7 @@ public partial class AnnotateView : UserControl
         if (_vm.IsBrushTool && _mouse is { } nib && !_stroking && !_space)
         {
             // the nib under the mouse: its size, angle and roundness before drawing
-            var c = _vm.Tool == "ornament" ? AnnotateViewModel.OrnamentColor : AnnotateViewModel.ChipColor(_vm.Active);
+            var c = _vm.BrushColor;
             Overlay.Children.Add(new Shapes.Path
             {
                 Data = StrokeGeometry.Build([[nib.X, nib.Y, 0]], _vm.Tip),

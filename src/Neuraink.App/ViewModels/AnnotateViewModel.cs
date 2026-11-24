@@ -57,6 +57,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public static readonly Color EntryColor = Color.FromRgb(0x3D, 0xD6, 0x8C);
     public static readonly Color ExitColor = Color.FromRgb(0xFF, 0xA5, 0x3D);
     public static readonly Color OrnamentColor = Color.FromRgb(0xE8, 0xB9, 0x3A);
+    public static readonly Color DiacriticColor = Color.FromRgb(0x4F, 0xC3, 0xF7);
 
     /// <summary>Calligraphic brush presets (angle / roundness), like the user's Illustrator brushes.</summary>
     public static readonly BrushTip[] Presets =
@@ -90,7 +91,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
             new ToolItem { Key = "exit", Shortcut = "4", Brush = Frozen(ExitColor) },
             new ToolItem { Key = "exclude", Shortcut = "5", Brush = Frozen(ExcludeColor) },
             new ToolItem { Key = "brush", Shortcut = "6", Brush = Frozen(ThemeService.AccentColor) },
-            new ToolItem { Key = "ornament", Shortcut = "7", Brush = Frozen(OrnamentColor) },
+            new ToolItem { Key = "diacritic", Shortcut = "7", Brush = Frozen(DiacriticColor) },
+            new ToolItem { Key = "ornament", Shortcut = "8", Brush = Frozen(OrnamentColor) },
         ];
         Tools[0].IsActive = true;
         LanguageService.Changed += () => { if (Item != null) { RebuildChips(); UpdateHint(); } };
@@ -140,7 +142,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         return Color.FromRgb((byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
     }
 
-    public Color ColorOf(Segment s) => s.Kind switch { "exclude" => ExcludeColor, "ornament" => OrnamentColor, _ => ChipColor(s.Chip) };
+    public Color ColorOf(Segment s) => s.Kind switch { "exclude" => ExcludeColor, "ornament" => OrnamentColor, "diacritic" => DiacriticColor, _ => ChipColor(s.Chip) };
 
     // ------------------------------------------------------------------ open
     public void OpenNext(int after)
@@ -177,6 +179,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Text = Ann.Text;
         _settingText = false;
         RebuildChips();
+        _strokeOrder = Ann.Segments.Count == 0 ? 0 : Ann.Segments.Max(x => x.Order);
         var first = Chips.FirstOrDefault(c => !IsDone(c.Chip.Index));
         Active = first?.Chip.Index ?? 0;
         Tool = first == null ? "letter" : StepFor(first.Chip.Index);
@@ -250,6 +253,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
                 Segment = s,
                 Brush = Frozen(ColorOf(s)),
                 Label = s.Kind is "exclude" or "ornament" ? Loc.T("Tool." + s.Kind)
+                    : s.Kind == "diacritic" ? $"{s.Letter}  ·  {Loc.T("Tool.diacritic")}"
                     : $"{s.Letter}  ·  {Loc.T("Tool." + s.Kind)}" + (s.Kind == "letter" ? (s.Entry != null ? "  ↘" : "") + (s.Exit != null ? "  ↗" : "") : ""),
             });
         UpdateHint();
@@ -261,6 +265,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         var c = ChipAt(Active);
         if (Tool == "exclude") Hint = Loc.T("Hint.exclude");
         else if (Tool == "ornament") Hint = Loc.T("Hint.ornament");
+        else if (Tool == "diacritic" && c != null) Hint = Loc.F("Hint.diacritic", c.Ch);
         else if (c == null) Hint = "";
         else if (Chips.Count > 0 && Chips.All(x => IsDone(x.Chip.Index))) Hint = Loc.T("Hint.done");
         else Hint = Loc.F("Hint." + Tool, c.Ch, Loc.T("Form." + Arabic.FormKey(c.Form)));
@@ -387,7 +392,10 @@ public sealed partial class AnnotateViewModel : ObservableObject
     }
 
     // ------------------------------------------------------------------ brush (calligraphic strokes traced over the letter)
+    /// <summary>The stroke being drawn: raw points x, y, pressure, milliseconds since the stroke began (speed and rhythm).</summary>
     public List<double[]> CurrentStroke { get; } = [];
+    private readonly System.Diagnostics.Stopwatch _strokeClock = new();
+    private int _strokeOrder;
     public BrushTip Tip => _main.Settings.Brush;
     public List<BrushTip> BrushPresets { get; } = [.. Presets];
     public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
@@ -396,7 +404,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
     public double PictureOpacity { get => Math.Round(_main.Settings.PictureOpacity * 100); set { _main.Settings.PictureOpacity = Math.Clamp(value / 100, 0.05, 1); OnPropertyChanged(); OnPropertyChanged(nameof(PictureOpacityValue)); _main.SaveSettings(); } }
     public double PictureOpacityValue => _main.Settings.PictureOpacity;
-    public bool IsBrushTool => Tool is "brush" or "ornament";
+    public bool IsBrushTool => Tool is "brush" or "ornament" or "diacritic";
+    public Color BrushColor => Tool switch { "ornament" => OrnamentColor, "diacritic" => DiacriticColor, _ => ChipColor(Active) };
 
     private DateTime _lastBrushSave;
     private void SaveBrush()
@@ -421,7 +430,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
     {
         if (Item == null || !IsBrushTool) return;
         CurrentStroke.Clear();
-        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3)]);
+        _strokeClock.Restart();
+        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), 0]);
         Redraw?.Invoke();
     }
 
@@ -430,7 +440,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         if (CurrentStroke.Count == 0) return;
         var last = CurrentStroke[^1];
         if (Math.Abs(p.X - last[0]) + Math.Abs(p.Y - last[1]) < minStep) return;
-        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3)]);
+        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), _strokeClock.ElapsedMilliseconds]);
         Redraw?.Invoke();
     }
 
@@ -442,9 +452,11 @@ public sealed partial class AnnotateViewModel : ObservableObject
         CurrentStroke.Clear();
         var c = ChipAt(Active);
         if (Tool == "ornament")
-            Ann.Segments.Add(new Segment { Kind = "ornament", Brush = Tip.Copy(), Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "ornament", Order = ++_strokeOrder, Brush = Tip.Copy(), Stroke = pts });
+        else if (Tool == "diacritic" && c != null)   // linguistic tashkeel belongs to its letter
+            Ann.Segments.Add(new Segment { Kind = "diacritic", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Stroke = pts });
         else if (c != null)
-            Ann.Segments.Add(new Segment { Kind = "stroke", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "stroke", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Stroke = pts });
         if (Tool == "brush" && !stay && AutoNextLetter && Chips.Count > 0)
         {
             for (int k = 1; k <= Chips.Count; k++)

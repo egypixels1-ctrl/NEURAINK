@@ -38,7 +38,8 @@ public static class LetterExporter
             letters.WriteMeta(path, new LetterMeta
             {
                 Letter = first.Letter, Form = first.Form, SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File,
-                Style = style, Tier = item.Tier, Chip = first.Chip, FromStrokes = true, Strokes = group.ToList(),
+                Style = style, Tier = item.Tier, Chip = first.Chip, FromStrokes = true,
+                Strokes = group.Concat(ann.Segments.Where(d => d.Kind == "diacritic" && d.Chip == first.Chip)).OrderBy(d => d.Order).ToList(),
                 BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
                 Entry = body?.Entry, Exit = body?.Exit, ImageSize = [w, h],
             });
@@ -47,16 +48,16 @@ public static class LetterExporter
 
         // ---- decorations drawn with the brush (tashkeel, ornaments): Letters\ornament
         int k = 0;
-        foreach (var orn in ann.Segments.Where(s => s.Kind == "ornament" && s.Stroke is { Count: > 0 }))
+        foreach (var orn in ann.Segments.Where(s => s.Kind is "ornament" or "diacritic" && s.Stroke is { Count: > 0 }))
         {
-            var dir = Path.Combine(letters.Folder, "ornament");
+            var dir = Path.Combine(letters.Folder, orn.Kind);
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, $"{item.Id:00000}_{k++:00}.png");
             if (!WriteVector(StrokeGeometry.Outline([orn]), path, out var box)) continue;
             letters.WriteMeta(path, new LetterMeta
             {
-                Letter = "", Form = "ornament", SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File, Style = style, Tier = item.Tier,
-                Chip = -1, FromStrokes = true, Strokes = [orn], ImageSize = [w, h],
+                Letter = orn.Letter, Form = orn.Kind == "diacritic" ? orn.Form : "ornament", SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File, Style = style, Tier = item.Tier,
+                Chip = orn.Kind == "diacritic" ? orn.Chip : -1, FromStrokes = true, Strokes = [orn], ImageSize = [w, h],
                 BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
             });
         }
