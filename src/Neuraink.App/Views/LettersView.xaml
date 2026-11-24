@@ -52,7 +52,7 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                            <ProgressBar Value="{Binding Percent}" Style="{StaticResource SlimBar}" Margin="0,12,0,0" />
+                                            <ProgressBar Value="{Binding Percent, Mode=OneWay}" Style="{StaticResource SlimBar}" Margin="0,12,0,0" />
                                         </StackPanel>
                                     </Border>
                                 </Button>

@@ -107,7 +107,7 @@
                                             <ColumnDefinition Width="90" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Letter}" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        <ProgressBar Grid.Column="1" Value="{Binding Percent}" Style="{StaticResource SlimBar}" Height="8" VerticalAlignment="Center" />
+                                        <ProgressBar Grid.Column="1" Value="{Binding Percent, Mode=OneWay}" Style="{StaticResource SlimBar}" Height="8" VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="2" Text="{Binding Text}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"
                                                    HorizontalAlignment="Right" FlowDirection="LeftToRight" />
                                     </Grid>

@@ -88,7 +88,7 @@
                     </StackPanel>
 
                     <!-- original -->
-                    <Border Width="160" Margin="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" CornerRadius="8" ClipToBounds="True"
+                    <Border Width="130" Margin="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" CornerRadius="8" ClipToBounds="True"
                             Background="{StaticResource PaperBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             ToolTip="{DynamicResource Ann.Original}" Opacity="0.95"
                             Visibility="{Binding ShowOriginal, Converter={StaticResource BoolToVis}}">
