@@ -7,6 +7,7 @@ namespace Neuraink.Core;
 /// learns from and produces lives in it, so it can be moved, backed up or opened on another computer.
 /// <code>
 /// NEURAINK Database\
+///   Artboards\           handwritten pieces: 900001.json (text, size, reference picture) + 900001.png (white)
 ///   Library\ديواني\      report.csv, clean_png\, svg\, thumbs\   (made by tools\diwani_triage.py, one folder per script style)
 ///   Annotations\          00042.json  (the segmentation of piece 42)
 ///   Letters\0645\         00042_01.png + .json  (letter cut-outs: the training data)
@@ -17,7 +18,7 @@ namespace Neuraink.Core;
 /// </summary>
 public sealed class NeurainkDatabase
 {
-    public static readonly string[] Folders = ["Library", "Annotations", "Letters", "Models", "Engine", ".neuraink"];
+    public static readonly string[] Folders = ["Library", "Artboards", "Annotations", "Letters", "Models", "Engine", ".neuraink"];
 
     public string Root { get; }
     public NeurainkDatabase(string root) => Root = (root ?? "").Trim();
@@ -28,6 +29,7 @@ public sealed class NeurainkDatabase
     public string AnnotationsFolder => Path.Combine(Root, "Annotations");
     public string LettersFolder => Path.Combine(Root, "Letters");
     public string ModelsFolder => Path.Combine(Root, "Models");
+    public string ArtboardsFolder => Path.Combine(Root, "Artboards");
     public string EngineFolder => Path.Combine(Root, "Engine");
     private string InfoFile => Path.Combine(Root, ".neuraink", "database.json");
 

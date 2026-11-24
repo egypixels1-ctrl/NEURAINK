@@ -76,12 +76,13 @@ public sealed partial class LibraryTile : ObservableObject
     public required string State { get; init; }
     public string Text => Item.Text;
     public bool IsBest => Item.Tier.Length > 0;
+    public bool IsArtboard => Item.IsArtboard;
     public string Badge => State switch
     {
         "done" => Loc.T("State.Done"),
         "partial" => Loc.T("State.Partial"),
         "rejected" => Loc.T("State.Rejected"),
-        _ => "×" + Item.Freq.ToString("N0"),
+        _ => Item.IsArtboard ? Loc.T("Board.Badge") : "×" + Item.Freq.ToString("N0"),
     };
     public bool IsDone => State is "done" or "partial";
     public bool IsRejected => State == "rejected";
@@ -121,7 +122,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         var lib = _main.Library;
         LibraryMissing = !lib.Found;
         var q = (Search ?? "").Trim();
-        IEnumerable<LibraryItem> items = lib.Items;
+        // the artboards (handwritten pieces) first, then the library
+        IEnumerable<LibraryItem> items = _main.Artboards.All().Select(_main.Artboards.ToItem).Concat(lib.Items);
         if (q.Length > 0) items = items.Where(i => i.Text.Contains(q, StringComparison.Ordinal) || i.File.Contains(q, StringComparison.OrdinalIgnoreCase));
         if (SingleWord) items = items.Where(i => i.Words == 1);
         items = Filter switch
@@ -135,7 +137,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         {
             1 => items.OrderBy(i => i.Tier.Length == 0).ThenByDescending(i => i.Freq).ThenBy(i => i.Id),
             2 => items.OrderBy(i => i.Id),
-            _ => items.OrderByDescending(i => i.Freq).ThenBy(i => i.Text, StringComparer.Ordinal).ThenBy(i => i.Id),
+            _ => items.OrderBy(i => !i.IsArtboard).ThenByDescending(i => i.Freq).ThenBy(i => i.Text, StringComparer.Ordinal).ThenBy(i => i.Id),
         };
         _matches = items.ToList();
         CountText = Loc.F("Lib.Count", _matches.Count.ToString("N0"));

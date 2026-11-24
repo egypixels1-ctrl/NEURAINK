@@ -32,6 +32,8 @@ public sealed class LetterMeta
     /// <summary>How the cut-out was made: brush (rendered from the strokes) or picture (the picture's ink inside the regions).</summary>
     [JsonPropertyName("source_kind")] public string SourceKind { get; set; } = "picture";
     [JsonPropertyName("split")] public string Split { get; set; } = "train";
+    /// <summary>library (traced over a library piece) or artboard (written directly by the calligrapher).</summary>
+    [JsonPropertyName("origin")] public string Origin { get; set; } = "library";
     [JsonPropertyName("created")] public string Created { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 }
 

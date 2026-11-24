@@ -55,6 +55,9 @@ public sealed class AppSettings
         DataPath = null;
         if (Brushes.Count == 0) { Brushes = BrushTip.Defaults(); BrushIndex = 6; }   // start on the 70° calligraphic nib
         BrushIndex = Math.Clamp(BrushIndex, 0, Brushes.Count - 1);
+        // the angle is shown next to the icon now: the starting names lose their "75°"
+        foreach (var b in Brushes)
+            if (System.Text.RegularExpressions.Regex.IsMatch(b.Name ?? "", @"^Calligraphic \d+°$")) b.Name = "Calligraphic";
         Brush = null;
     }
 }

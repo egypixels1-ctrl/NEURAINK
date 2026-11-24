@@ -10,7 +10,9 @@ public sealed class BrushTip
     [JsonPropertyName("size")] public double Size { get; set; } = 24;
     [JsonPropertyName("angle")] public double Angle { get; set; } = 70;
     [JsonPropertyName("roundness")] public double Roundness { get; set; } = 0.2;
-    public BrushTip Copy() => new() { Name = Name, Size = Size, Angle = Angle, Roundness = Roundness };
+    /// <summary>How opaque the strokes look while drawing (display only; saved letters are always solid black).</summary>
+    [JsonPropertyName("opacity")] public double Opacity { get; set; } = 1;
+    public BrushTip Copy() => new() { Name = Name, Size = Size, Angle = Angle, Roundness = Roundness, Opacity = Opacity };
 
     /// <summary>Roundness of every new brush (6 %).</summary>
     public const double DefaultRoundness = 0.06;
@@ -20,7 +22,7 @@ public sealed class BrushTip
     {
         var list = new List<BrushTip> { new() { Name = "Round", Size = 20, Angle = 0, Roundness = 1 } };
         foreach (var a in new[] { 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 136 })
-            list.Add(new BrushTip { Name = $"Calligraphic {a}°", Size = 20, Angle = a, Roundness = DefaultRoundness });
+            list.Add(new BrushTip { Name = "Calligraphic", Size = 20, Angle = a, Roundness = DefaultRoundness });
         return list;
     }
 }
@@ -39,6 +41,11 @@ public sealed class Segment
     [JsonPropertyName("brush")] public BrushTip? Brush { get; set; }
     /// <summary>Raw points as drawn (no smoothing): x, y, pressure (0 = mouse), milliseconds since the stroke began.</summary>
     [JsonPropertyName("stroke")] public List<double[]>? Stroke { get; set; }
+    /// <summary>
+    /// Brush strokes: the path rebuilt from a few smooth Bézier curves when the stroke ended (like the Illustrator Paintbrush):
+    /// per curve x0, y0, x1, y1, x2, y2, x3, y3, pressure at the start, pressure at the end.
+    /// </summary>
+    [JsonPropertyName("fit")] public List<double[]>? Fit { get; set; }
     /// <summary>Brush strokes: the smoothing used (0 accurate … 4 smooth); the raw points stay as drawn.</summary>
     [JsonPropertyName("fidelity")] public int Fidelity { get; set; } = 4;
     /// <summary>Brush strokes: their order in the piece (1, 2, 3 …) — the calligrapher's sequence.</summary>
@@ -70,8 +77,8 @@ public sealed class Annotation
 public static class DataVersion
 {
     /// <summary>1: polygons (browser version) · 2: + pen Bézier, brush strokes (x, y, pressure, ms), order, tashkeel, versions, split
-    /// · 3: + stroke fidelity (smoothing).</summary>
-    public const int Schema = 3;
+    /// · 3: + stroke fidelity (smoothing) · 4: + fitted Bézier curves per stroke, artboards (handwritten pieces).</summary>
+    public const int Schema = 4;
     public static string Engine { get; set; } = "0.0.0";
 
     /// <summary>

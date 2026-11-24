@@ -60,6 +60,18 @@ public partial class App : Application
                 vm.Go(vm.Annotate);
                 Dispatcher.BeginInvoke(() => DemoBrush(vm.Annotate), DispatcherPriority.ContextIdle);
                 break;
+            case "artboard":
+                // a new artboard «محمد» with a faded reference picture and two strokes fitted into smooth curves
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (vm.NewArtboard("محمد", 1200, 1200) is not { } board) return;
+                    vm.OpenAnnotate(board.Id);
+                    var refPic = vm.Library.Items.Select(i => vm.FullPath(i.Png)).FirstOrDefault(File.Exists);
+                    if (refPic != null) vm.Annotate.SetReference(refPic);
+                    vm.Annotate.AdjustReference = false;
+                    DemoBrush(vm.Annotate);
+                }, DispatcherPriority.ContextIdle);
+                break;
             case "brush-options":
                 vm.Go(vm.Annotate);
                 Dispatcher.BeginInvoke(() =>
@@ -110,11 +122,11 @@ public partial class App : Application
                 for (int k = 1; k <= 12; k++)
                 {
                     double t = k / 12.0;
-                    var x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t;
-                    var y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t;
+                    var x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t + Math.Sin(k * 2.1 + i) * 0.004;
+                    var y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t + Math.Cos(k * 1.7 + i) * 0.004;
                     a.ExtendStroke(new Point(w * x, h * y), 0, 0.5);
                 }
-            a.EndStroke(stay: false);
+            a.EndStroke(stay: false, zoom: 0.5);
         }
         Stroke((0.80, 0.30), (0.88, 0.45), (0.82, 0.62), (0.72, 0.70));
         Stroke((0.62, 0.35), (0.58, 0.55), (0.50, 0.68), (0.40, 0.70));

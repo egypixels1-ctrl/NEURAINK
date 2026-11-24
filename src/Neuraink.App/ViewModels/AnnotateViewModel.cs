@@ -37,9 +37,14 @@ public sealed partial class BrushItem : ObservableObject
     public required BrushTip Tip { get; init; }
     public required int Index { get; init; }
     public string Name => Tip.Name;
+    /// <summary>The angle, from the brush's settings (not from its name).</summary>
+    public string AngleText => Tip.Roundness >= 0.99 ? "●" : $"{Tip.Angle:0}°";
+    [ObservableProperty] private bool _isRenaming;
+    [ObservableProperty] private string _editName = "";
+    public void Refresh() { OnPropertyChanged(nameof(Name)); OnPropertyChanged(nameof(AngleText)); OnPropertyChanged(nameof(Angle)); OnPropertyChanged(nameof(Details)); }
     public double Angle => Tip.Angle;
     public double Roundness => Tip.Roundness;
-    public string Details => $"{Tip.Angle:0}° · {Tip.Roundness * 100:0}% · {Tip.Size:0}";
+    public string Details => $"{Tip.Angle:0}° · {Tip.Roundness * 100:0}% · {Tip.Size:0} · {Tip.Opacity * 100:0}%";
     [ObservableProperty] private bool _isSelected;
 }
 
@@ -173,7 +178,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         if (id is { } i) Open(i, remember: after != 0);
         else
         {
-            Item = null; HasItem = false; NothingLeft = true; Image = null; Original = null;
+            Item = null; HasItem = false; NothingLeft = true; Image = null; Original = null; _board = null; Reference = null; NotifyReference();
             Chips.Clear(); Segments.Clear(); Drawing.Clear();
             Redraw?.Invoke();
         }
@@ -181,7 +186,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
 
     public void Open(int id, bool remember)
     {
-        var item = _main.Library.Get(id);
+        var item = _main.GetItem(id);
         if (item == null) return;
         if (remember && Item != null && Item.Id != id) _history.Push(Item.Id);
         Item = item;
@@ -195,8 +200,12 @@ public sealed partial class AnnotateViewModel : ObservableObject
         FileInfo = item.File;
         Drawing.Clear();
         _undo.Clear(); _redo.Clear();
-        Image = Images.Load(_main.Library.FullPath(item.Png));
-        Original = _main.Settings.ShowOriginal ? Images.Load(_main.Library.FullPath(item.Thumb), 320) : null;
+        Image = Images.Load(_main.FullPath(item.Png));
+        _board = item.IsArtboard ? _main.Artboards.Get(item.Id) : null;
+        Reference = _board?.Reference is { } rp ? Images.Load(rp) : null;
+        AdjustReference = false;
+        NotifyReference();
+        Original = _main.Settings.ShowOriginal ? Images.Load(_main.FullPath(item.Thumb), 320) : null;
         OnPropertyChanged(nameof(ShowOriginal));
         OnPropertyChanged(nameof(IsTestSet));
         _settingText = true;
@@ -343,11 +352,67 @@ public sealed partial class AnnotateViewModel : ObservableObject
         return n;
     }
 
-    /// <summary>Pen tool: dragging from an anchor makes it smooth — the out handle follows the mouse, the in handle mirrors it.</summary>
-    public void DragHandles(PenNode n, Point to)
+    /// <summary>
+    /// Pen tool: dragging from an anchor makes it smooth — the out handle follows the mouse and the in handle mirrors it;
+    /// with Alt only the out handle moves (the in side keeps its shape).
+    /// </summary>
+    public void DragHandles(PenNode n, Point to, bool alt = false)
     {
         n.Out = to;
-        n.In = new Point(2 * n.A.X - to.X, 2 * n.A.Y - to.Y);
+        if (!alt) n.In = new Point(2 * n.A.X - to.X, 2 * n.A.Y - to.Y);
+        Redraw?.Invoke();
+    }
+
+    /// <summary>What a click lands on in the pen path: an anchor, its in handle or its out handle.</summary>
+    public (PenNode Node, string Part)? HitPen(Point p, double radius)
+    {
+        for (int i = Drawing.Count - 1; i >= 0; i--)
+        {
+            var n = Drawing[i];
+            if (n.Out is { } o && (o - p).Length <= radius) return (n, "out");
+            if (n.In is { } q && (q - p).Length <= radius) return (n, "in");
+        }
+        for (int i = Drawing.Count - 1; i >= 0; i--)
+            if ((Drawing[i].A - p).Length <= radius) return (Drawing[i], "anchor");
+        return null;
+    }
+
+    public bool IsLastAnchor(PenNode n) => Drawing.Count > 0 && ReferenceEquals(Drawing[^1], n);
+
+    /// <summary>Moves an anchor with its handles.</summary>
+    public void MoveAnchor(PenNode n, Point to)
+    {
+        var d = to - n.A;
+        n.A = to;
+        if (n.In is { } i) n.In = i + d;
+        if (n.Out is { } o) n.Out = o + d;
+        Redraw?.Invoke();
+    }
+
+    /// <summary>Moves a handle; the opposite handle mirrors its direction (keeping its own length) unless Alt breaks them apart.</summary>
+    public void MoveHandle(PenNode n, bool outHandle, Point to, bool alt)
+    {
+        if (outHandle) n.Out = to; else n.In = to;
+        var other = outHandle ? n.In : n.Out;
+        if (!alt && other is { } ot)
+        {
+            var dir = n.A - to;
+            if (dir.Length > 1e-6)
+            {
+                dir.Normalize();
+                var p = n.A + dir * (ot - n.A).Length;
+                if (outHandle) n.In = p; else n.Out = p;
+            }
+        }
+        Redraw?.Invoke();
+    }
+
+    /// <summary>Alt + click on the last anchor: its out handle is removed (the next part starts straight or anew).</summary>
+    public void CutOutHandle(PenNode n)
+    {
+        if (n.Out == null) return;
+        Checkpoint();
+        n.Out = null;
         Redraw?.Invoke();
     }
 
@@ -441,8 +506,123 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
     public int Fidelity { get => _main.Settings.Fidelity; set { _main.Settings.Fidelity = Math.Clamp(value, 0, 4); OnPropertyChanged(); _main.SaveSettings(); Redraw?.Invoke(); } }
     public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
-    public double PictureOpacity { get => Math.Round(_main.Settings.PictureOpacity * 100); set { _main.Settings.PictureOpacity = Math.Clamp(value / 100, 0.05, 1); OnPropertyChanged(); OnPropertyChanged(nameof(PictureOpacityValue)); _main.SaveSettings(); } }
-    public double PictureOpacityValue => _main.Settings.PictureOpacity;
+    public double PictureOpacity
+    {
+        get => Math.Round((_board != null ? _board.RefOpacity : _main.Settings.PictureOpacity) * 100);
+        set
+        {
+            var v = Math.Clamp(value / 100, 0.05, 1);
+            if (_board != null) { _board.RefOpacity = v; SaveBoard(); }
+            else { _main.Settings.PictureOpacity = v; _main.SaveSettings(); }
+            OnPropertyChanged(); OnPropertyChanged(nameof(PictureOpacityValue)); OnPropertyChanged(nameof(RefOpacity));
+        }
+    }
+    /// <summary>Opacity of the piece's picture (an artboard's white page always shows fully).</summary>
+    public double PictureOpacityValue => _board != null ? 1 : _main.Settings.PictureOpacity;
+
+    // ------------------------------------------------------------------ artboard (written directly, over an optional reference picture)
+    private Artboard? _board;
+    public bool IsArtboard => _board != null;
+    [ObservableProperty] private BitmapSource? _reference;
+    [ObservableProperty] private bool _adjustReference;
+    public double RefX => _board?.RefX ?? 0;
+    public double RefY => _board?.RefY ?? 0;
+    public double RefScale => _board?.RefScale ?? 1;
+    public double RefOpacity => _board?.RefOpacity ?? 0.35;
+    public bool HasReference => Reference != null;
+    partial void OnReferenceChanged(BitmapSource? value) => OnPropertyChanged(nameof(HasReference));
+
+    private DateTime _lastBoardSave;
+    private void SaveBoard(bool now = false)
+    {
+        if (_board == null) return;
+        if (!now && (DateTime.Now - _lastBoardSave).TotalMilliseconds < 300) return;
+        _lastBoardSave = DateTime.Now;
+        try { _main.Artboards.Save(_board); } catch { }
+    }
+
+    private void NotifyReference()
+    {
+        OnPropertyChanged(nameof(RefX)); OnPropertyChanged(nameof(RefY)); OnPropertyChanged(nameof(RefScale));
+        OnPropertyChanged(nameof(RefOpacity)); OnPropertyChanged(nameof(HasReference)); OnPropertyChanged(nameof(IsArtboard));
+        OnPropertyChanged(nameof(PictureOpacity)); OnPropertyChanged(nameof(PictureOpacityValue));
+    }
+
+    /// <summary>Adds (or replaces) the reference picture of the artboard; the window opens on the Desktop.</summary>
+    [RelayCommand]
+    private void AddReference()
+    {
+        if (_board == null) return;
+        var d = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = Loc.T("Board.Pictures") + "|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.tif;*.tiff",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+        };
+        if (d.ShowDialog(Application.Current?.MainWindow) != true) return;
+        SetReference(d.FileName);
+    }
+
+    public void SetReference(string file)
+    {
+        if (_board == null) return;
+        var img = Images.Load(file);
+        if (img == null) { Dialogs.Error(Loc.T("Board.BadPicture")); return; }
+        _board.Reference = file;
+        // fitted in the page, centred
+        double sc = Math.Min(_board.Width * 0.9 / img.PixelWidth, _board.Height * 0.9 / img.PixelHeight);
+        _board.RefScale = sc;
+        _board.RefX = (_board.Width - img.PixelWidth * sc) / 2;
+        _board.RefY = (_board.Height - img.PixelHeight * sc) / 2;
+        Reference = img;
+        AdjustReference = true;
+        SaveBoard(now: true);
+        NotifyReference();
+    }
+
+    [RelayCommand] private void ToggleAdjustReference() => AdjustReference = HasReference && !AdjustReference;
+
+    public void MoveReference(Vector by)
+    {
+        if (_board == null) return;
+        _board.RefX += by.X; _board.RefY += by.Y;
+        SaveBoard();
+        NotifyReference();
+    }
+
+    /// <summary>Scales the reference around a point of the page (mouse wheel while adjusting it).</summary>
+    public void ScaleReference(double factor, Point around)
+    {
+        if (_board == null) return;
+        double s0 = _board.RefScale, s1 = Math.Clamp(s0 * factor, 0.02, 40);
+        _board.RefX = around.X - (around.X - _board.RefX) * s1 / s0;
+        _board.RefY = around.Y - (around.Y - _board.RefY) * s1 / s0;
+        _board.RefScale = s1;
+        SaveBoard();
+        NotifyReference();
+    }
+
+    /// <summary>Saves the strokes of this piece as a vector PDF (pure black on white); the window opens on the Desktop.</summary>
+    [RelayCommand]
+    private void ExportPdf()
+    {
+        if (Item == null || Image == null) return;
+        var strokes = Ann.Segments.Where(x => x.Kind is "stroke" or "diacritic" or "ornament" && x.Stroke is { Count: > 0 } && x.Brush != null).ToList();
+        if (strokes.Count == 0) { ShowToast(Loc.T("Pdf.Nothing")); return; }
+        var name = string.Join("_", (Ann.Text.Length > 0 ? Ann.Text : $"NEURAINK {Item.Id}").Split(System.IO.Path.GetInvalidFileNameChars()));
+        var d = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "PDF|*.pdf", FileName = name + ".pdf", DefaultExt = ".pdf",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+        };
+        if (d.ShowDialog(Application.Current?.MainWindow) != true) return;
+        try
+        {
+            var outline = StrokeGeometry.Outline(strokes);
+            PaperWriter.Pdf(d.FileName, [outline], Image.PixelWidth, Image.PixelHeight);
+            ShowToast(Loc.F("Pdf.Saved", System.IO.Path.GetFileName(d.FileName)));
+        }
+        catch (Exception ex) { Dialogs.Error(ex.Message); }
+    }
     public bool IsBrushTool => Tool is "brush" or "ornament" or "diacritic";
     public bool IsPenTool => !IsBrushTool && Tool is not ("entry" or "exit");
     public Color BrushColor => Tool switch { "ornament" => OrnamentColor, "diacritic" => DiacriticColor, _ => ChipColor(Active) };
@@ -530,6 +710,40 @@ public sealed partial class AnnotateViewModel : ObservableObject
         LoadBrushes();
     }
 
+    /// <summary>Alt + wheel: turns the brush (5° a notch, 1° with Shift); returns the new angle.</summary>
+    public double RotateBrush(double degrees)
+    {
+        var a = (Tip.Angle + degrees) % 180;
+        if (a < 0) a += 180;
+        Tip.Angle = Math.Round(a);
+        foreach (var b in BrushList) if (b.IsSelected) b.Refresh();
+        SaveBrush();
+        return Tip.Angle;
+    }
+
+    // ---- rename a brush in its row (right-click › Rename, or F2)
+    [RelayCommand]
+    private void RenameBrush(BrushItem? b)
+    {
+        b ??= BrushList.FirstOrDefault(x => x.IsSelected);
+        if (b == null) return;
+        foreach (var x in BrushList) x.IsRenaming = false;
+        b.EditName = b.Tip.Name;
+        b.IsRenaming = true;
+    }
+
+    public void CommitRename(BrushItem b, bool keep)
+    {
+        if (!b.IsRenaming) return;
+        b.IsRenaming = false;
+        if (keep && !string.IsNullOrWhiteSpace(b.EditName))
+        {
+            b.Tip.Name = b.EditName.Trim();
+            b.Refresh();
+            _main.SaveSettings();
+        }
+    }
+
     [RelayCommand] private void UsePen() => Tool = "letter";
     [RelayCommand] private void UseBrush() => Tool = "brush";
 
@@ -538,7 +752,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     {
         _main.Settings.ShowOriginal = !_main.Settings.ShowOriginal;
         _main.SaveSettings();
-        if (_main.Settings.ShowOriginal && Original == null && Item != null) Original = Images.Load(_main.Library.FullPath(Item.Thumb), 320);
+        if (_main.Settings.ShowOriginal && Original == null && Item != null) Original = Images.Load(_main.FullPath(Item.Thumb), 320);
         OnPropertyChanged(nameof(ShowOriginal));
     }
 
@@ -607,18 +821,22 @@ public sealed partial class AnnotateViewModel : ObservableObject
     }
 
     /// <summary>The stroke is kept for the active letter (or as an ornament); then, unless Shift is held, the next letter.</summary>
-    public void EndStroke(bool stay)
+    public void EndStroke(bool stay, double zoom = 1)
     {
         if (CurrentStroke.Count == 0) return;
         var pts = CurrentStroke.ToList();
         CurrentStroke.Clear();
+        // like the Illustrator Paintbrush: the stroke is rebuilt from a few smooth Bézier curves (tolerance in screen pixels)
+        var tol = StrokeGeometry.FitTolerance[Math.Clamp(Fidelity, 0, StrokeGeometry.FitTolerance.Length - 1)] / Math.Max(0.05, zoom);
+        List<double[]>? fit = null;
+        try { fit = pts.Count >= 2 ? StrokeGeometry.Fit(pts, tol) : null; } catch { fit = null; }
         var c = ChipAt(Active);
         if (Tool == "ornament")
-            Ann.Segments.Add(new Segment { Kind = "ornament", Order = ++_strokeOrder, Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "ornament", Order = ++_strokeOrder, Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts, Fit = fit });
         else if (Tool == "diacritic" && c != null)   // linguistic tashkeel belongs to its letter
-            Ann.Segments.Add(new Segment { Kind = "diacritic", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "diacritic", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts, Fit = fit });
         else if (c != null)
-            Ann.Segments.Add(new Segment { Kind = "stroke", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "stroke", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts, Fit = fit });
         if (Tool == "brush" && !stay && AutoNextLetter && Chips.Count > 0)
         {
             for (int k = 1; k <= Chips.Count; k++)
@@ -698,7 +916,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         bool all = Chips.Count > 0 && Chips.All(c => Body(c.Chip.Index) != null || HasStrokes(c.Chip.Index));
         Ann.State = all ? "done" : "partial";
         Persist();
-        int n = LetterExporter.Export(Item, Ann, _main.Library.FullPath(Item.Png), _main.Letters, _main.Settings.Style);
+        int n = LetterExporter.Export(Item, Ann, _main.FullPath(Item.Png), _main.Letters, _main.Settings.Style);
         ShowToast(all ? Loc.F("Ann.Saved", n) : Loc.T("Ann.Partial"));
         _main.RefreshCounts();
         OpenNext(Item.Id);
@@ -714,6 +932,16 @@ public sealed partial class AnnotateViewModel : ObservableObject
         ShowToast(Loc.T("Ann.Rejected"));
         _main.RefreshCounts();
         OpenNext(Item.Id);
+    }
+
+    /// <summary>Asks the text and size of a new artboard, then opens it.</summary>
+    public Func<(string Text, int W, int H)?>? NewArtboardDialog { get; set; }
+
+    [RelayCommand]
+    private void NewArtboard()
+    {
+        if (NewArtboardDialog?.Invoke() is not { } r) return;
+        if (_main.NewArtboard(r.Text, r.W, r.H) is { } item) Open(item.Id, remember: true);
     }
 
     [RelayCommand] private void Skip() { if (Item != null) OpenNext(Item.Id); }

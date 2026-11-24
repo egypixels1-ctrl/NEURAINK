@@ -46,6 +46,7 @@ public sealed class BrushOptionsWindow : Window
         root.Children.Add(Row("Brush.Size", 2, 160, tip.Size, v => tip.Size = v, "0"));
         root.Children.Add(Row("Brush.Angle", 0, 180, tip.Angle, v => tip.Angle = v, "0°"));
         root.Children.Add(Row("Brush.Roundness", 2, 100, tip.Roundness * 100, v => tip.Roundness = v / 100, "0'%'"));
+        root.Children.Add(Row("Brush.Opacity", 5, 100, tip.Opacity * 100, v => tip.Opacity = v / 100, "0'%'"));
 
         var buttons = new DockPanel { Margin = new Thickness(0, 18, 0, 0), LastChildFill = false };
         var ok = new Button { Content = Loc.T("Common.OK"), MinWidth = 96, Padding = new Thickness(0, 7, 0, 7), IsDefault = true };
@@ -119,7 +120,7 @@ public sealed class BrushOptionsWindow : Window
             double t = i / 120.0;
             pts.Add([40 + t * 200, 62 - Math.Sin(t * Math.PI * 2) * 30, 0]);
         }
-        _preview.Children.Add(new Shapes.Path { Data = StrokeGeometry.Build(pts, tip, 4), Fill = Brushes.Black });
+        _preview.Children.Add(new Shapes.Path { Data = StrokeGeometry.Build(pts, tip, 4), Fill = Brushes.Black, Opacity = Math.Clamp(tip.Opacity, 0.05, 1) });
         // the nib alone, at the right
         _preview.Children.Add(new Shapes.Path { Data = StrokeGeometry.Build([[272, 60, 0]], tip), Fill = new SolidColorBrush(accent) });
     }

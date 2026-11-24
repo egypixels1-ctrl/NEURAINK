@@ -27,6 +27,32 @@ public sealed partial class MainViewModel : ObservableObject
     public Library Library { get; private set; } = null!;
     public AnnotationStore Annotations { get; private set; } = null!;
     public LetterLibrary Letters { get; private set; } = null!;
+    public ArtboardStore Artboards { get; private set; } = null!;
+
+    /// <summary>A piece by id: from the library, or an artboard (ids from 900001).</summary>
+    public LibraryItem? GetItem(int id)
+    {
+        if (id >= ArtboardStore.FirstId) return Artboards.Get(id) is { } a ? Artboards.ToItem(a) : null;
+        return Library.Get(id);
+    }
+
+    /// <summary>Full path of a piece's file (library paths are relative; artboard paths are already full).</summary>
+    public string FullPath(string path) => Library.FullPath(path);
+
+    /// <summary>
+    /// A new white artboard to write on directly: its picture is a white page of the chosen size; its letters are
+    /// handwritten training data (origin "artboard").
+    /// </summary>
+    public LibraryItem? NewArtboard(string text, int width, int height)
+    {
+        if (!Database.Exists) { Dialogs.Error(Loc.T("Db.NotSet")); return null; }
+        var a = new Artboard { Id = Artboards.NextId(), Text = text.Trim(), Width = width, Height = height };
+        Directory.CreateDirectory(Artboards.Folder);
+        Services.PaperWriter.WhitePng(Artboards.PngPath(a.Id), width, height);
+        Artboards.Save(a);
+        LibraryPage.Reload();
+        return Artboards.ToItem(a);
+    }
 
     public DashboardViewModel Dashboard { get; }
     public LibraryViewModel LibraryPage { get; }
@@ -75,6 +101,9 @@ public sealed partial class MainViewModel : ObservableObject
     public void LoadData()
     {
         Database = new NeurainkDatabase(Settings.DatabasePath);
+        // a database of an older version gets the folders added since (e.g. Artboards); nothing is replaced
+        if (Database.Exists && !Database.IsComplete) try { Database.CreateMissing(); } catch { }
+        Artboards = new ArtboardStore(Database.IsSet ? Database.ArtboardsFolder : "");
         Library = new Library(Database.LibraryFolder(Settings.Style));
         Annotations = new AnnotationStore(Database.IsSet ? Database.AnnotationsFolder : "");
         Letters = new LetterLibrary(Database.IsSet ? Database.LettersFolder : "");
@@ -154,8 +183,8 @@ public sealed partial class MainViewModel : ObservableObject
         int n = 0;
         foreach (var id in Annotations.Ids.ToList())
         {
-            if (!Annotations.IsSegmented(id) || Library.Get(id) is not { } item || Annotations.Load(id) is not { } ann) continue;
-            n += LetterExporter.Export(item, ann, Library.FullPath(item.Png), Letters, Settings.Style);
+            if (!Annotations.IsSegmented(id) || GetItem(id) is not { } item || Annotations.Load(id) is not { } ann) continue;
+            n += LetterExporter.Export(item, ann, FullPath(item.Png), Letters, Settings.Style);
         }
         RefreshCounts();
         return n;
@@ -182,10 +211,10 @@ public sealed partial class MainViewModel : ObservableObject
             ann.State = ann.Segments.Any(x => x.Kind is "letter" or "stroke") ? "partial" : "";
             if (ann.State == "") Annotations.Delete(ann.Id);
             else Annotations.Save(ann);
-            if (Library.Get(m.SourceId) is { } item)
+            if (GetItem(m.SourceId) is { } item)
             {
                 if (ann.State == "") Letters.RemoveSource(item.Id);
-                else LetterExporter.Export(item, ann, Library.FullPath(item.Png), Letters, Settings.Style);
+                else LetterExporter.Export(item, ann, FullPath(item.Png), Letters, Settings.Style);
                 rewritten = true;
             }
         }

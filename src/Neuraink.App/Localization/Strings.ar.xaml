@@ -179,4 +179,22 @@
     <sys:String x:Key="Brush.Fidelity">الدقة والنعومة (Fidelity)</sys:String>
     <sys:String x:Key="Brush.Accurate">دقيق</sys:String>
     <sys:String x:Key="Brush.Smooth">ناعم</sys:String>
+    <sys:String x:Key="Board.New">لوح رسم جديد</sys:String>
+    <sys:String x:Key="Board.Text">النص المراد كتابته</sys:String>
+    <sys:String x:Key="Board.TextHint">حروفه توجّه التقطيع كأي مخطوطة.</sys:String>
+    <sys:String x:Key="Board.Size">مقاس اللوح</sys:String>
+    <sys:String x:Key="Board.Create">إنشاء</sys:String>
+    <sys:String x:Key="Board.AddReference">إضافة صورة مرجعية (تفتح على سطح المكتب)</sys:String>
+    <sys:String x:Key="Board.Adjust">تحريك وتكبير الصورة المرجعية (سحب · عجلة)</sys:String>
+    <sys:String x:Key="Board.Pictures">الصور</sys:String>
+    <sys:String x:Key="Board.BadPicture">تعذّر فتح هذه الصورة.</sys:String>
+    <sys:String x:Key="Board.Badge">✍ خط يد</sys:String>
+    <sys:String x:Key="Pdf.Export">حفظ كملف PDF متجه (سطح المكتب)</sys:String>
+    <sys:String x:Key="Pdf.Nothing">لا توجد ضربات فرشاة للحفظ بعد</sys:String>
+    <sys:String x:Key="Pdf.Saved">تم الحفظ: {0}</sys:String>
+    <sys:String x:Key="Hint.Show">التوجيه</sys:String>
+    <sys:String x:Key="Brushes.Rename">إعادة تسمية</sys:String>
+    <sys:String x:Key="Brush.Opacity">الشفافية</sys:String>
+    <sys:String x:Key="Key.AltWheel">تدوير الفرشاة (5° · مع Shift درجة)</sys:String>
+    <sys:String x:Key="Key.AltDrag">القلم: تحريك مقبض وحده · Alt+نقر آخر نقطة: حذف مقبضها</sys:String>
 </ResourceDictionary>

@@ -179,4 +179,22 @@
     <sys:String x:Key="Brush.Fidelity">Fidelity</sys:String>
     <sys:String x:Key="Brush.Accurate">Accurate</sys:String>
     <sys:String x:Key="Brush.Smooth">Smooth</sys:String>
+    <sys:String x:Key="Board.New">New artboard</sys:String>
+    <sys:String x:Key="Board.Text">Text to write</sys:String>
+    <sys:String x:Key="Board.TextHint">Its letters guide the segmentation, like any piece.</sys:String>
+    <sys:String x:Key="Board.Size">Artboard size</sys:String>
+    <sys:String x:Key="Board.Create">Create</sys:String>
+    <sys:String x:Key="Board.AddReference">Add a reference picture (opens on the Desktop)</sys:String>
+    <sys:String x:Key="Board.Adjust">Move / scale the reference (drag · wheel)</sys:String>
+    <sys:String x:Key="Board.Pictures">Pictures</sys:String>
+    <sys:String x:Key="Board.BadPicture">This picture could not be opened.</sys:String>
+    <sys:String x:Key="Board.Badge">✍ Handwritten</sys:String>
+    <sys:String x:Key="Pdf.Export">Save as vector PDF (Desktop)</sys:String>
+    <sys:String x:Key="Pdf.Nothing">No brush strokes to save yet</sys:String>
+    <sys:String x:Key="Pdf.Saved">Saved: {0}</sys:String>
+    <sys:String x:Key="Hint.Show">Guidance</sys:String>
+    <sys:String x:Key="Brushes.Rename">Rename</sys:String>
+    <sys:String x:Key="Brush.Opacity">Opacity</sys:String>
+    <sys:String x:Key="Key.AltWheel">Turn the brush (5° · Shift 1°)</sys:String>
+    <sys:String x:Key="Key.AltDrag">Pen: move one handle alone · Alt+click last point: cut its handle</sys:String>
 </ResourceDictionary>

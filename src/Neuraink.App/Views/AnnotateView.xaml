@@ -24,6 +24,9 @@
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE72A;" FontSize="12" Margin="8,0,0,0" />
                     </StackPanel>
                 </Button>
+                <Button Command="{Binding NewArtboardCommand}" Margin="0,0,8,0" Padding="10,7" ToolTip="{DynamicResource Board.New}">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" FontSize="13" />
+                </Button>
                 <Button Command="{Binding SaveCommand}" Style="{DynamicResource AccentButtonStyle}" Padding="16,7">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE74E;" FontSize="12" Margin="0,0,8,0" />
@@ -40,6 +43,12 @@
             <!-- tool switch: pen tool / brush (Illustrator icons) -->
             <Border DockPanel.Dock="Left" Style="{StaticResource Card}" Padding="4" Margin="22,0,0,0" VerticalAlignment="Center" CornerRadius="9" FlowDirection="LeftToRight">
                 <StackPanel Orientation="Horizontal">
+                    <Button Command="{Binding ExportPdfCommand}" ToolTip="{DynamicResource Pdf.Export}" Style="{StaticResource ToolSwitch}" Margin="0,0,10,0">
+                        <Grid>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="17" />
+                            <TextBlock Text="PDF" FontSize="6.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,1" />
+                        </Grid>
+                    </Button>
                     <Button Command="{Binding UsePenCommand}" ToolTip="{DynamicResource Tool.PenSwitch}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource ToolSwitch}">
@@ -96,16 +105,37 @@
                                 </Border.Effect>
                             </Border>
                             <Image x:Name="Pic" Source="{Binding Image}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" Opacity="{Binding PictureOpacityValue}" />
+                            <!-- artboard: the reference picture (moved / scaled / faded; never part of the data) -->
+                            <Canvas x:Name="RefLayer" IsHitTestVisible="False" ClipToBounds="True">
+                                <Image x:Name="RefPic" Source="{Binding Reference}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" Opacity="{Binding RefOpacity}" />
+                                <Border x:Name="RefFrame" BorderBrush="#FF3B82F6" BorderThickness="2" Visibility="{Binding AdjustReference, Converter={StaticResource BoolToVis}}" />
+                            </Canvas>
                             <Canvas x:Name="Overlay" Background="Transparent" Cursor="Pen" MouseLeftButtonDown="OnOverlayDown" MouseMove="OnOverlayMove" MouseLeftButtonUp="OnOverlayUp" MouseLeave="OnOverlayLeave" />
                         </Grid>
                     </ScrollViewer>
 
-                    <!-- hint -->
-                    <Border Style="{StaticResource Card}" Padding="12,8" Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top" MaxWidth="620"
-                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" Opacity="0.95"
-                            Visibility="{Binding Hint, Converter={StaticResource NonEmptyToVis}}">
-                        <TextBlock Text="{Binding Hint}" TextWrapping="Wrap" FlowDirection="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                    </Border>
+                    <!-- hint: a small orange "!" (pulses when the guidance changes); a click shows the guidance -->
+                    <StackPanel Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top" Orientation="Horizontal"
+                                Visibility="{Binding Hint, Converter={StaticResource NonEmptyToVis}}">
+                        <ToggleButton x:Name="HintToggle" Width="30" Height="30" Cursor="Hand" Focusable="False" VerticalAlignment="Top" ToolTip="{DynamicResource Hint.Show}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Grid>
+                                        <Ellipse x:Name="HintDot" Fill="#FFF59E0B" RenderTransformOrigin="0.5,0.5">
+                                            <Ellipse.RenderTransform><ScaleTransform x:Name="HintScale" /></Ellipse.RenderTransform>
+                                            <Ellipse.Effect><DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.45" /></Ellipse.Effect>
+                                        </Ellipse>
+                                        <TextBlock Text="!" FontWeight="Bold" FontSize="17" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+                                    </Grid>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <Border Margin="8,0,0,0" CornerRadius="8" Padding="12,8" MaxWidth="560" Background="#F21C1C1E" BorderBrush="#FFF59E0B" BorderThickness="1"
+                                Visibility="{Binding IsChecked, ElementName=HintToggle, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding Hint}" TextWrapping="Wrap" Foreground="White" FontSize="12.5"
+                                       FlowDirection="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </Border>
+                    </StackPanel>
 
                     <!-- toast -->
                     <Border Style="{StaticResource Card}" Padding="16,9" Margin="0,0,0,16" HorizontalAlignment="Center" VerticalAlignment="Bottom"
@@ -151,7 +181,18 @@
                 <StackPanel>
                     <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,10">
                         <StackPanel>
-                            <TextBlock Text="{DynamicResource Ann.Text}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                            <DockPanel Margin="0,0,0,8">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding IsArtboard, Converter={StaticResource BoolToVis}}">
+                                    <Button Command="{Binding ToggleAdjustReferenceCommand}" Padding="8,4" Margin="0,0,6,0" ToolTip="{DynamicResource Board.Adjust}"
+                                            Visibility="{Binding HasReference, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7C2;" FontSize="13" />
+                                    </Button>
+                                    <Button Command="{Binding AddReferenceCommand}" Padding="8,4" ToolTip="{DynamicResource Board.AddReference}">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8B9;" FontSize="13" />
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Text="{DynamicResource Ann.Text}" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                            </DockPanel>
                             <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged, Delay=400}" FontSize="18" FontWeight="SemiBold"
                                      FlowDirection="RightToLeft" Padding="10,6" />
                             <TextBlock Text="{DynamicResource Ann.Fix}" Style="{StaticResource Muted}" FontSize="11.5" Margin="0,6,0,0" />
@@ -265,6 +306,7 @@
                                         <DockPanel ToolTip="{Binding Details}">
                                             <DockPanel.ContextMenu>
                                                 <ContextMenu>
+                                                    <MenuItem Header="{DynamicResource Brushes.Rename}" Click="OnBrushRenameMenu" InputGestureText="F2" />
                                                     <MenuItem Header="{DynamicResource Brushes.Edit}" Click="OnBrushEditMenu" />
                                                     <MenuItem Header="{DynamicResource Brushes.Duplicate}" Click="OnBrushDuplicateMenu" />
                                                 </ContextMenu>
@@ -279,8 +321,16 @@
                                                     </Ellipse.RenderTransform>
                                                 </Ellipse>
                                             </Grid>
-                                            <!-- name (right) -->
-                                            <TextBlock Text="{Binding Name}" FontSize="12.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <!-- angle (from the brush's settings, not its name) -->
+                                            <TextBlock Text="{Binding AngleText}" FontSize="12" Width="38" VerticalAlignment="Center" Opacity="0.85" />
+                                            <!-- name; a box in its place while renaming -->
+                                            <Grid>
+                                                <TextBlock Text="{Binding Name}" FontSize="12.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           Visibility="{Binding IsRenaming, Converter={StaticResource InverseBoolToVis}}" />
+                                                <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" FontSize="12.5" Padding="4,1" MinHeight="0"
+                                                         Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVis}}"
+                                                         KeyDown="OnRenameKey" LostFocus="OnRenameLost" IsVisibleChanged="OnRenameShown" />
+                                            </Grid>
                                         </DockPanel>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
@@ -338,7 +388,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                 </Grid.RowDefinitions>
                                 <Border Grid.Row="0" Style="{StaticResource Kbd}"><TextBlock Text="Click / Drag" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource Key.Pen}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
@@ -356,6 +406,10 @@
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="{DynamicResource Key.S}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
                                 <Border Grid.Row="7" Style="{StaticResource Kbd}"><TextBlock Text="1 – 8" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="7" Grid.Column="1" Text="{DynamicResource Key.Num}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="10" Style="{StaticResource Kbd}"><TextBlock Text="Alt + Wheel" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="10" Grid.Column="1" Text="{DynamicResource Key.AltWheel}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <Border Grid.Row="11" Style="{StaticResource Kbd}"><TextBlock Text="Alt + Drag" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="11" Grid.Column="1" Text="{DynamicResource Key.AltDrag}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
                                 <Border Grid.Row="9" Style="{StaticResource Kbd}"><TextBlock Text="Shift" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="9" Grid.Column="1" Text="{DynamicResource Key.Shift}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
                                 <Border Grid.Row="8" Style="{StaticResource Kbd}"><TextBlock Text="Ctrl+Wheel" FontSize="11" /></Border>

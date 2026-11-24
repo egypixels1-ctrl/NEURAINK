@@ -14,6 +14,9 @@ public sealed class LibraryItem
     public string Svg { get; init; } = "";
     public string Thumb { get; init; } = "";
     public int Freq { get; set; }
+    /// <summary>library (a piece of the triage library) or artboard (written directly on a white artboard).</summary>
+    public string Source { get; init; } = "library";
+    public bool IsArtboard => Source == "artboard";
     public int Words => Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
 }
 
