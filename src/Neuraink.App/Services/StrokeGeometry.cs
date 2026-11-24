@@ -24,7 +24,7 @@ public static class StrokeGeometry
         if (fidelity <= 0 || pts.Count < 3) return pts.ToList();
         double sigma = Sigma[Math.Clamp(fidelity, 0, Sigma.Length - 1)];
         // 1. even spacing (1 px), so the smoothing does not depend on the mouse speed
-        var even = new List<double[]> { [pts[0][0], pts[0][1], Pr(pts[0])] };
+        var even = new List<double[]> { new[] { pts[0][0], pts[0][1], Pr(pts[0]) } };
         double carry = 0;
         for (int i = 1; i < pts.Count; i++)
         {
