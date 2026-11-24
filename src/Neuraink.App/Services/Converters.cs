@@ -41,3 +41,18 @@ public sealed class AllTrueToVisibilityConverter : IMultiValueConverter
         values.All(v => v is true) ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => [];
 }
+
+/// <summary>Brush preset preview: the nib ellipse height (20 px wide) from its roundness 0–1.</summary>
+public sealed class NibHeightConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is double r ? Math.Max(2.5, 20 * r) : 20.0;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
+/// <summary>-x (brush angles turn counter-clockwise on screen).</summary>
+public sealed class NegateConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is double d ? -d : 0.0;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}

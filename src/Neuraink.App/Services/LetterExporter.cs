@@ -24,11 +24,48 @@ public static class LetterExporter
         gray.CopyPixels(ink, w, 0);
 
         int count = 0;
+
+        // ---- letters drawn with the brush: the cut-out is rendered from the strokes (a smooth vector) + an SVG
+        var strokeChips = new HashSet<int>();
+        foreach (var group in ann.Segments.Where(s => s.Kind == "stroke" && s.Stroke is { Count: > 0 } && s.Letter.Length > 0).GroupBy(s => s.Chip))
+        {
+            var first = group.First();
+            var outline = StrokeGeometry.Outline(group);
+            var path = letters.PathFor(first.Letter, item.Id, first.Chip, "png");
+            if (!WriteVector(outline, path, out var box)) continue;
+            strokeChips.Add(first.Chip);
+            var body = ann.Segments.FirstOrDefault(s => s.Kind == "letter" && s.Chip == first.Chip);
+            letters.WriteMeta(path, new LetterMeta
+            {
+                Letter = first.Letter, Form = first.Form, SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File,
+                Style = style, Tier = item.Tier, Chip = first.Chip, FromStrokes = true, Strokes = group.ToList(),
+                BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
+                Entry = body?.Entry, Exit = body?.Exit, ImageSize = [w, h],
+            });
+            count++;
+        }
+
+        // ---- decorations drawn with the brush (tashkeel, ornaments): Letters\ornament
+        int k = 0;
+        foreach (var orn in ann.Segments.Where(s => s.Kind == "ornament" && s.Stroke is { Count: > 0 }))
+        {
+            var dir = Path.Combine(letters.Folder, "ornament");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{item.Id:00000}_{k++:00}.png");
+            if (!WriteVector(StrokeGeometry.Outline([orn]), path, out var box)) continue;
+            letters.WriteMeta(path, new LetterMeta
+            {
+                Letter = "", Form = "ornament", SourceId = item.Id, SourceText = ann.Text, SourceFile = item.File, Style = style, Tier = item.Tier,
+                Chip = -1, FromStrokes = true, Strokes = [orn], ImageSize = [w, h],
+                BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
+            });
+        }
+
         foreach (var group in ann.Segments.Where(s => s.Kind is "letter" or "dots" && s.Points.Count >= 3 && s.Letter.Length > 0)
                                           .GroupBy(s => s.Chip))
         {
             var body = group.FirstOrDefault(s => s.Kind == "letter");
-            if (body == null) continue;
+            if (body == null || strokeChips.Contains(body.Chip)) continue;
             var mask = RenderMask(group.Select(s => s.Points).ToList(), w, h);
 
             int x0 = w, y0 = h, x1 = -1, y1 = -1;
@@ -61,6 +98,28 @@ public static class LetterExporter
             count++;
         }
         return count;
+    }
+
+    /// <summary>The outline as a black PNG (transparent background, picture pixels) and an SVG next to it.</summary>
+    private static bool WriteVector(Geometry outline, string pngPath, out Rect box)
+    {
+        box = outline.Bounds;
+        if (box.IsEmpty || box.Width < 1 || box.Height < 1) return false;
+        int pw = (int)Math.Ceiling(box.Width) + 2, ph = (int)Math.Ceiling(box.Height) + 2;
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            dc.PushTransform(new TranslateTransform(-box.X + 1, -box.Y + 1));
+            dc.DrawGeometry(Brushes.Black, null, outline);
+            dc.Pop();
+        }
+        var rtb = new RenderTargetBitmap(pw, ph, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(rtb));
+        using (var fs = File.Create(pngPath)) enc.Save(fs);
+        File.WriteAllText(Path.ChangeExtension(pngPath, ".svg"), StrokeGeometry.ToSvg(outline, box));
+        return true;
     }
 
     /// <summary>The regions filled white on a transparent bitmap of the picture's size (BGRA bytes).</summary>

@@ -56,6 +56,24 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public static readonly Color ExcludeColor = Color.FromRgb(0xFF, 0x5D, 0x5D);
     public static readonly Color EntryColor = Color.FromRgb(0x3D, 0xD6, 0x8C);
     public static readonly Color ExitColor = Color.FromRgb(0xFF, 0xA5, 0x3D);
+    public static readonly Color OrnamentColor = Color.FromRgb(0xE8, 0xB9, 0x3A);
+
+    /// <summary>Calligraphic brush presets (angle / roundness), like the user's Illustrator brushes.</summary>
+    public static readonly BrushTip[] Presets =
+    [
+        new() { Name = "●", Angle = 0, Roundness = 1 },
+        new() { Name = "45°", Angle = 45, Roundness = 0.2 },
+        new() { Name = "50°", Angle = 50, Roundness = 0.2 },
+        new() { Name = "55°", Angle = 55, Roundness = 0.2 },
+        new() { Name = "60°", Angle = 60, Roundness = 0.2 },
+        new() { Name = "65°", Angle = 65, Roundness = 0.2 },
+        new() { Name = "70°", Angle = 70, Roundness = 0.2 },
+        new() { Name = "75°", Angle = 75, Roundness = 0.2 },
+        new() { Name = "80°", Angle = 80, Roundness = 0.2 },
+        new() { Name = "85°", Angle = 85, Roundness = 0.2 },
+        new() { Name = "90°", Angle = 90, Roundness = 0.2 },
+        new() { Name = "136°", Angle = 136, Roundness = 0.2 },
+    ];
 
     private readonly MainViewModel _main;
     private readonly Stack<int> _history = new();
@@ -71,6 +89,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
             new ToolItem { Key = "entry", Shortcut = "3", Brush = Frozen(EntryColor) },
             new ToolItem { Key = "exit", Shortcut = "4", Brush = Frozen(ExitColor) },
             new ToolItem { Key = "exclude", Shortcut = "5", Brush = Frozen(ExcludeColor) },
+            new ToolItem { Key = "brush", Shortcut = "6", Brush = Frozen(ThemeService.AccentColor) },
+            new ToolItem { Key = "ornament", Shortcut = "7", Brush = Frozen(OrnamentColor) },
         ];
         Tools[0].IsActive = true;
         LanguageService.Changed += () => { if (Item != null) { RebuildChips(); UpdateHint(); } };
@@ -120,7 +140,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         return Color.FromRgb((byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
     }
 
-    public Color ColorOf(Segment s) => s.Kind == "exclude" ? ExcludeColor : ChipColor(s.Chip);
+    public Color ColorOf(Segment s) => s.Kind switch { "exclude" => ExcludeColor, "ornament" => OrnamentColor, _ => ChipColor(s.Chip) };
 
     // ------------------------------------------------------------------ open
     public void OpenNext(int after)
@@ -193,8 +213,11 @@ public sealed partial class AnnotateViewModel : ObservableObject
     private Segment? Body(int chip) => Ann.Segments.FirstOrDefault(s => s.Kind == "letter" && s.Chip == chip);
     private LetterChip? ChipAt(int i) => i >= 0 && i < Chips.Count ? Chips[i].Chip : null;
 
+    private bool HasStrokes(int chip) => Ann.Segments.Any(s => s.Kind == "stroke" && s.Chip == chip);
+
     public bool IsDone(int i)
     {
+        if (HasStrokes(i)) return true;   // drawn with the brush: its joins are the stroke ends
         var b = Body(i);
         var c = ChipAt(i);
         if (b == null || c == null) return false;
@@ -204,6 +227,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     /// <summary>The next step for a letter: body, then entry, then exit.</summary>
     private string StepFor(int i)
     {
+        if (Tool == "brush") return "brush";
         var b = Body(i);
         var c = ChipAt(i);
         if (b == null || c == null) return "letter";
@@ -225,7 +249,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
             {
                 Segment = s,
                 Brush = Frozen(ColorOf(s)),
-                Label = s.Kind == "exclude" ? Loc.T("Tool.exclude")
+                Label = s.Kind is "exclude" or "ornament" ? Loc.T("Tool." + s.Kind)
                     : $"{s.Letter}  ·  {Loc.T("Tool." + s.Kind)}" + (s.Kind == "letter" ? (s.Entry != null ? "  ↘" : "") + (s.Exit != null ? "  ↗" : "") : ""),
             });
         UpdateHint();
@@ -236,6 +260,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     {
         var c = ChipAt(Active);
         if (Tool == "exclude") Hint = Loc.T("Hint.exclude");
+        else if (Tool == "ornament") Hint = Loc.T("Hint.ornament");
         else if (c == null) Hint = "";
         else if (Chips.Count > 0 && Chips.All(x => IsDone(x.Chip.Index))) Hint = Loc.T("Hint.done");
         else Hint = Loc.F("Hint." + Tool, c.Ch, Loc.T("Form." + Arabic.FormKey(c.Form)));
@@ -244,6 +269,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
     partial void OnToolChanged(string value)
     {
         foreach (var t in Tools) t.IsActive = t.Key == value;
+        CurrentStroke.Clear();
+        OnPropertyChanged(nameof(IsBrushTool));
         Drawing.Clear();
         UpdateHint();
         Redraw?.Invoke();
@@ -359,6 +386,76 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Refresh();
     }
 
+    // ------------------------------------------------------------------ brush (calligraphic strokes traced over the letter)
+    public List<double[]> CurrentStroke { get; } = [];
+    public BrushTip Tip => _main.Settings.Brush;
+    public List<BrushTip> BrushPresets { get; } = [.. Presets];
+    public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
+    public double BrushAngle { get => Tip.Angle; set { Tip.Angle = Math.Clamp(Math.Round(value), 0, 180); Tip.Name = ""; OnPropertyChanged(); SaveBrush(); } }
+    public double BrushRoundness { get => Math.Round(Tip.Roundness * 100); set { Tip.Roundness = Math.Clamp(value / 100, 0.02, 1); Tip.Name = ""; OnPropertyChanged(); SaveBrush(); } }
+    public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
+    public double PictureOpacity { get => Math.Round(_main.Settings.PictureOpacity * 100); set { _main.Settings.PictureOpacity = Math.Clamp(value / 100, 0.05, 1); OnPropertyChanged(); OnPropertyChanged(nameof(PictureOpacityValue)); _main.SaveSettings(); } }
+    public double PictureOpacityValue => _main.Settings.PictureOpacity;
+    public bool IsBrushTool => Tool is "brush" or "ornament";
+
+    private DateTime _lastBrushSave;
+    private void SaveBrush()
+    {
+        Redraw?.Invoke();
+        if ((DateTime.Now - _lastBrushSave).TotalMilliseconds < 400) return;
+        _lastBrushSave = DateTime.Now;
+        _main.SaveSettings();
+    }
+
+    [RelayCommand]
+    private void PickPreset(BrushTip? p)
+    {
+        if (p == null) return;
+        Tip.Angle = p.Angle; Tip.Roundness = p.Roundness; Tip.Name = p.Name;
+        OnPropertyChanged(nameof(BrushAngle)); OnPropertyChanged(nameof(BrushRoundness));
+        _main.SaveSettings();
+        Redraw?.Invoke();
+    }
+
+    public void BeginStroke(Point p, double pressure)
+    {
+        if (Item == null || !IsBrushTool) return;
+        CurrentStroke.Clear();
+        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3)]);
+        Redraw?.Invoke();
+    }
+
+    public void ExtendStroke(Point p, double pressure, double minStep)
+    {
+        if (CurrentStroke.Count == 0) return;
+        var last = CurrentStroke[^1];
+        if (Math.Abs(p.X - last[0]) + Math.Abs(p.Y - last[1]) < minStep) return;
+        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3)]);
+        Redraw?.Invoke();
+    }
+
+    /// <summary>The stroke is kept for the active letter (or as an ornament); then, unless Shift is held, the next letter.</summary>
+    public void EndStroke(bool stay)
+    {
+        if (CurrentStroke.Count == 0) return;
+        var pts = CurrentStroke.ToList();
+        CurrentStroke.Clear();
+        var c = ChipAt(Active);
+        if (Tool == "ornament")
+            Ann.Segments.Add(new Segment { Kind = "ornament", Brush = Tip.Copy(), Stroke = pts });
+        else if (c != null)
+            Ann.Segments.Add(new Segment { Kind = "stroke", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Stroke = pts });
+        if (Tool == "brush" && !stay && AutoNextLetter && Chips.Count > 0)
+        {
+            for (int k = 1; k <= Chips.Count; k++)
+            {
+                int i = (Active + k) % Chips.Count;
+                if (!IsDone(i)) { Active = i; break; }
+            }
+        }
+        Refresh();
+    }
+
     public void BackspacePoint()
     {
         if (Drawing.Count > 0) { Drawing.RemoveAt(Drawing.Count - 1); Redraw?.Invoke(); }
@@ -427,7 +524,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     {
         if (Item == null) return;
         if (Ann.Segments.Count == 0) { ShowToast(Loc.T("Ann.NeedBody")); return; }
-        bool all = Chips.Count > 0 && Chips.All(c => Body(c.Chip.Index) != null);
+        bool all = Chips.Count > 0 && Chips.All(c => Body(c.Chip.Index) != null || HasStrokes(c.Chip.Index));
         Ann.State = all ? "done" : "partial";
         Persist();
         int n = LetterExporter.Export(Item, Ann, _main.Library.FullPath(Item.Png), _main.Letters, _main.Settings.Style);

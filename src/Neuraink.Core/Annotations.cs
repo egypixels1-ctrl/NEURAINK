@@ -3,16 +3,29 @@ using System.Text.Json.Serialization;
 
 namespace Neuraink.Core;
 
+/// <summary>A calligraphic brush tip (like an Illustrator calligraphic brush): size in picture pixels, angle in degrees, roundness 0–1.</summary>
+public sealed class BrushTip
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("size")] public double Size { get; set; } = 24;
+    [JsonPropertyName("angle")] public double Angle { get; set; } = 70;
+    [JsonPropertyName("roundness")] public double Roundness { get; set; } = 0.2;
+    public BrushTip Copy() => new() { Name = Name, Size = Size, Angle = Angle, Roundness = Roundness };
+}
+
 /// <summary>A region drawn on a piece: a letter body, its dots, or an ornament / frame / signature to exclude.</summary>
 public sealed class Segment
 {
-    [JsonPropertyName("kind")] public string Kind { get; set; } = "letter";   // letter | dots | exclude
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "letter";   // letter | dots | exclude | stroke | ornament
     [JsonPropertyName("chip")] public int Chip { get; set; } = -1;            // index of the letter in the text
     [JsonPropertyName("letter")] public string Letter { get; set; } = "";
     [JsonPropertyName("form")] public string Form { get; set; } = "";
     [JsonPropertyName("points")] public List<double[]> Points { get; set; } = [];
     /// <summary>The pen path (Illustrator style): per anchor x, y, in-handle x, y, out-handle x, y. Empty for older regions.</summary>
     [JsonPropertyName("bezier")] public List<double[]>? Bezier { get; set; }
+    /// <summary>Brush strokes (kind stroke / ornament): the tip and the path as x, y, pressure — in the order they were drawn.</summary>
+    [JsonPropertyName("brush")] public BrushTip? Brush { get; set; }
+    [JsonPropertyName("stroke")] public List<double[]>? Stroke { get; set; }
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
     [JsonPropertyName("exit")] public double[]? Exit { get; set; }
     [JsonPropertyName("entrySkipped")] public bool EntrySkipped { get; set; }

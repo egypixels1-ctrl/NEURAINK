@@ -49,6 +49,11 @@ public partial class App : Application
                 vm.Go(vm.Annotate);
                 Dispatcher.BeginInvoke(() => { DemoSegments(vm.Annotate); vm.Annotate.CancelDrawing(); vm.Annotate.Save(); }, DispatcherPriority.ContextIdle);
                 break;
+            case "annotate-brush":
+                // the brush: two letters traced with a 70° nib, the picture faded to 45 % (nothing is saved)
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() => DemoBrush(vm.Annotate), DispatcherPriority.ContextIdle);
+                break;
             case "colorpicker":
                 vm.Go(vm.SettingsPage);
                 Dispatcher.BeginInvoke(() => new Views.ColorPickerWindow(System.Windows.Media.Color.FromRgb(0x7C, 0x5C, 0xFF)) { Owner = window }.Show(),
@@ -75,6 +80,30 @@ public partial class App : Application
         a.Click(new Point(w * 0.30, h * 0.30), 1);
         a.Click(new Point(w * 0.40, h * 0.30), 1);
         a.Click(new Point(w * 0.40, h * 0.50), 1);
+    }
+
+    private static void DemoBrush(AnnotateViewModel a)
+    {
+        if (a.Image is not { } img) return;
+        double w = img.PixelWidth, h = img.PixelHeight;
+        a.SetToolByKey(6);
+        a.PictureOpacity = 45;
+        a.BrushSize = Math.Max(8, w / 22);
+        void Stroke(params (double x, double y)[] pts)
+        {
+            a.BeginStroke(new Point(w * pts[0].x, h * pts[0].y), 0);
+            for (int i = 1; i < pts.Length; i++)
+                for (int k = 1; k <= 12; k++)
+                {
+                    double t = k / 12.0;
+                    var x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t;
+                    var y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t;
+                    a.ExtendStroke(new Point(w * x, h * y), 0, 0.5);
+                }
+            a.EndStroke(stay: false);
+        }
+        Stroke((0.80, 0.30), (0.88, 0.45), (0.82, 0.62), (0.72, 0.70));
+        Stroke((0.62, 0.35), (0.58, 0.55), (0.50, 0.68), (0.40, 0.70));
     }
 
     private static void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Neuraink.App.Services;
 using Neuraink.App.ViewModels;
 using Shapes = System.Windows.Shapes;
 
@@ -74,6 +75,15 @@ public partial class AnnotateView : UserControl
     private PenNode? _dragNode;
     private Point _downAt;
     private Point? _mouse;
+    private bool _stroking;
+
+    /// <summary>Pen pressure of a tablet (0–1); 0 for a mouse (the nib keeps its size).</summary>
+    private double Pressure(MouseEventArgs e)
+    {
+        if (e.StylusDevice == null) return 0;
+        var pts = e.StylusDevice.GetStylusPoints(Overlay);
+        return pts.Count > 0 ? pts[^1].PressureFactor : 0;
+    }
 
     private void OnOverlayDown(object sender, MouseButtonEventArgs e)
     {
@@ -81,6 +91,14 @@ public partial class AnnotateView : UserControl
         if (_vm == null || _space) return;
         var p = e.GetPosition(Overlay);
         if (_vm.Tool is "entry" or "exit") { _vm.Click(p, 10 / _zoom); return; }
+        if (_vm.IsBrushTool)
+        {
+            _vm.BeginStroke(p, Pressure(e));
+            Overlay.CaptureMouse();
+            _stroking = true;
+            e.Handled = true;
+            return;
+        }
         if (_vm.IsOnFirstAnchor(p, 10 / _zoom)) { _vm.CloseShape(); return; }
         // a click adds a corner anchor; dragging before releasing pulls out smooth curve handles
         _dragNode = _vm.AddAnchor(p);
@@ -94,6 +112,8 @@ public partial class AnnotateView : UserControl
         if (_vm == null) return;
         var p = e.GetPosition(Overlay);
         _mouse = p;
+        if (_stroking && e.LeftButton == MouseButtonState.Pressed) { _vm.ExtendStroke(p, Pressure(e), 1.2 / _zoom); return; }
+        if (_vm.IsBrushTool) { Draw(); return; }   // nib preview follows the mouse
         if (_dragNode != null && e.LeftButton == MouseButtonState.Pressed)
         {
             if ((p - _downAt).Length * _zoom > 3) _vm.DragHandles(_dragNode, p);
@@ -104,6 +124,11 @@ public partial class AnnotateView : UserControl
 
     private void OnOverlayUp(object sender, MouseButtonEventArgs e)
     {
+        if (_stroking)
+        {
+            _stroking = false;
+            _vm?.EndStroke(stay: (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+        }
         _dragNode = null;
         if (Overlay.IsMouseCaptured) Overlay.ReleaseMouseCapture();
     }
@@ -115,7 +140,7 @@ public partial class AnnotateView : UserControl
 
     private void SetHand(bool on)
     {
-        Overlay.Cursor = on ? Cursors.Hand : Cursors.Pen;
+        Overlay.Cursor = on ? Cursors.Hand : _vm?.IsBrushTool == true ? Cursors.Cross : Cursors.Pen;
         Scroller.Cursor = on ? Cursors.Hand : null;
     }
 
@@ -194,6 +219,7 @@ public partial class AnnotateView : UserControl
         Overlay.Width = img.PixelWidth;
         Overlay.Height = img.PixelHeight;
         double px = 1 / _zoom;   // one screen pixel in picture units
+        if (!_space && !_panning) Overlay.Cursor = _vm.IsBrushTool ? Cursors.Cross : Cursors.Pen;
 
         foreach (var s in _vm.Ann.Segments)
         {
@@ -215,6 +241,41 @@ public partial class AnnotateView : UserControl
                 if (s.Entry is { } en) Dot(en[0], en[1], 7 * px, AnnotateViewModel.EntryColor, px);
                 if (s.Exit is { } ex) Dot(ex[0], ex[1], 7 * px, AnnotateViewModel.ExitColor, px);
             }
+        }
+
+        // brush strokes: the letter traced with the calligraphic nib, in its colour
+        foreach (var s in _vm.Ann.Segments.Where(x => x.Stroke is { Count: > 0 } && x.Brush != null))
+        {
+            var c = _vm.ColorOf(s);
+            bool on = s.Kind == "ornament" || s.Chip == _vm.Active;
+            Overlay.Children.Add(new Shapes.Path
+            {
+                Data = StrokeGeometry.Build(s.Stroke!, s.Brush!),
+                Fill = new SolidColorBrush(Color.FromArgb((byte)(on ? 200 : 150), c.R, c.G, c.B)),
+                IsHitTestVisible = false,
+            });
+        }
+        if (_vm.CurrentStroke.Count > 0)
+        {
+            var c = _vm.Tool == "ornament" ? AnnotateViewModel.OrnamentColor : AnnotateViewModel.ChipColor(_vm.Active);
+            Overlay.Children.Add(new Shapes.Path
+            {
+                Data = StrokeGeometry.Build(_vm.CurrentStroke, _vm.Tip),
+                Fill = new SolidColorBrush(Color.FromArgb(210, c.R, c.G, c.B)),
+                IsHitTestVisible = false,
+            });
+        }
+        if (_vm.IsBrushTool && _mouse is { } nib && !_stroking && !_space)
+        {
+            // the nib under the mouse: its size, angle and roundness before drawing
+            var c = _vm.Tool == "ornament" ? AnnotateViewModel.OrnamentColor : AnnotateViewModel.ChipColor(_vm.Active);
+            Overlay.Children.Add(new Shapes.Path
+            {
+                Data = StrokeGeometry.Build([[nib.X, nib.Y, 0]], _vm.Tip),
+                Stroke = new SolidColorBrush(c), StrokeThickness = 1.2 * px,
+                Fill = new SolidColorBrush(Color.FromArgb(60, c.R, c.G, c.B)),
+                IsHitTestVisible = false,
+            });
         }
 
         if (_vm.Drawing.Count > 0)

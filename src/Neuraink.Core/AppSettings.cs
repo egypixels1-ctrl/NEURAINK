@@ -31,6 +31,12 @@ public sealed class AppSettings
     public string? DataPath { get; set; }
     /// <summary>Script style recorded with every segmented letter.</summary>
     public string Style { get; set; } = "ديواني";
+    /// <summary>Segmentation: the calligraphic brush in use.</summary>
+    public BrushTip Brush { get; set; } = new() { Name = "70°", Size = 24, Angle = 70, Roundness = 0.2 };
+    /// <summary>Segmentation: after a brush stroke, move on to the next letter (Shift keeps the same letter).</summary>
+    public bool AutoNextLetter { get; set; } = true;
+    /// <summary>Segmentation: opacity of the reference picture (0.05–1), to trace over it.</summary>
+    public double PictureOpacity { get; set; } = 1;
     /// <summary>Show a small picture of the original while segmenting.</summary>
     public bool ShowOriginal { get; set; } = true;
 

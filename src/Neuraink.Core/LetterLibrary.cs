@@ -19,6 +19,10 @@ public sealed class LetterMeta
     [JsonPropertyName("polygons")] public List<List<double[]>> Polygons { get; set; } = [];
     /// <summary>The pen paths of the regions (anchor + handles), when drawn with the pen tool.</summary>
     [JsonPropertyName("beziers")] public List<List<double[]>>? Beziers { get; set; }
+    /// <summary>The brush strokes of the letter (vector reference): tip + points x, y, pressure.</summary>
+    [JsonPropertyName("strokes")] public List<Segment>? Strokes { get; set; }
+    /// <summary>The cut-out made from brush strokes (smooth vector) rather than from the picture's ink.</summary>
+    [JsonPropertyName("from_strokes")] public bool FromStrokes { get; set; }
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
     [JsonPropertyName("exit")] public double[]? Exit { get; set; }
     [JsonPropertyName("image_size")] public int[] ImageSize { get; set; } = [];
