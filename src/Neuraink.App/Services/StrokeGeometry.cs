@@ -52,17 +52,50 @@ public static class StrokeGeometry
             var n = new Vector(-d.Y, d.X);
             n.Normalize();
             Vector o0 = Support(n, Scale(i - 1)), o1 = Support(n, Scale(i));
+            // every piece must turn the same way as the ellipses: with the non-zero rule, opposite turns cancel out (holes)
+            Point[] q = [p0 + o0, p1 + o1, p1 - o1, p0 - o0];
+            if (Math.Sign(SignedArea(q)) != EllipseTurn) Array.Reverse(q);
             var quad = new StreamGeometry();
             using (var g = quad.Open())
             {
-                g.BeginFigure(p0 + o0, true, true);
-                g.PolyLineTo(new[] { p1 + o1, p1 - o1, p0 - o0 }, true, false);
+                g.BeginFigure(q[0], true, true);
+                g.PolyLineTo(new[] { q[1], q[2], q[3] }, true, false);
             }
             group.Children.Add(quad);
             Stamp(p1, Scale(i));
         }
         group.Freeze();
         return group;
+    }
+
+    private static double SignedArea(IReadOnlyList<Point> p)
+    {
+        double a = 0;
+        for (int i = 0; i < p.Count; i++)
+        {
+            var u = p[i]; var v = p[(i + 1) % p.Count];
+            a += u.X * v.Y - v.X * u.Y;
+        }
+        return a;
+    }
+
+    /// <summary>Which way WPF draws an ellipse (+1 / -1), measured once.</summary>
+    private static readonly int EllipseTurn = MeasureEllipseTurn();
+
+    private static int MeasureEllipseTurn()
+    {
+        var flat = new EllipseGeometry(new Point(0, 0), 2, 1).GetFlattenedPathGeometry();
+        var pts = new List<Point>();
+        foreach (var f in flat.Figures)
+        {
+            pts.Add(f.StartPoint);
+            foreach (var seg in f.Segments)
+                if (seg is PolyLineSegment pl) pts.AddRange(pl.Points);
+                else if (seg is LineSegment l) pts.Add(l.Point);
+            break;
+        }
+        var sign = Math.Sign(SignedArea(pts));
+        return sign == 0 ? 1 : sign;
     }
 
     /// <summary>All the strokes of a letter as one filled outline (overlaps merged).</summary>
