@@ -31,8 +31,14 @@ public sealed class AppSettings
     public string? DataPath { get; set; }
     /// <summary>Script style recorded with every segmented letter.</summary>
     public string Style { get; set; } = "ديواني";
-    /// <summary>Segmentation: the calligraphic brush in use.</summary>
-    public BrushTip Brush { get; set; } = new() { Name = "70°", Size = 24, Angle = 70, Roundness = 0.2 };
+    /// <summary>Older versions: one brush (replaced by <see cref="Brushes"/>).</summary>
+    public BrushTip? Brush { get; set; }
+    /// <summary>Segmentation › Brushes: the user's calligraphic brushes (like the Illustrator Brushes panel).</summary>
+    public List<BrushTip> Brushes { get; set; } = [];
+    /// <summary>Index of the brush in use.</summary>
+    public int BrushIndex { get; set; }
+    /// <summary>Brush smoothing, like the Illustrator Paintbrush Fidelity: 0 accurate … 4 smooth.</summary>
+    public int Fidelity { get; set; } = 4;
     /// <summary>Segmentation: after a brush stroke, move on to the next letter (Shift keeps the same letter).</summary>
     public bool AutoNextLetter { get; set; } = true;
     /// <summary>Segmentation: opacity of the reference picture (0.05–1), to trace over it.</summary>
@@ -47,6 +53,9 @@ public sealed class AppSettings
             DatabasePath = p.FullName;
         LibraryPath = null;
         DataPath = null;
+        if (Brushes.Count == 0) Brushes = BrushTip.Defaults();
+        BrushIndex = Math.Clamp(BrushIndex, 0, Brushes.Count - 1);
+        Brush = null;
     }
 }
 

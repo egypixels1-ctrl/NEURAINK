@@ -11,6 +11,18 @@ public sealed class BrushTip
     [JsonPropertyName("angle")] public double Angle { get; set; } = 70;
     [JsonPropertyName("roundness")] public double Roundness { get; set; } = 0.2;
     public BrushTip Copy() => new() { Name = Name, Size = Size, Angle = Angle, Roundness = Roundness };
+
+    /// <summary>Roundness of every new brush (6 %).</summary>
+    public const double DefaultRoundness = 0.06;
+
+    /// <summary>The starting Brushes list: round, then flat nibs from 45° to 136°.</summary>
+    public static List<BrushTip> Defaults()
+    {
+        var list = new List<BrushTip> { new() { Name = "Round", Size = 20, Angle = 0, Roundness = 1 } };
+        foreach (var a in new[] { 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 136 })
+            list.Add(new BrushTip { Name = $"Calligraphic {a}°", Size = 20, Angle = a, Roundness = DefaultRoundness });
+        return list;
+    }
 }
 
 /// <summary>A region drawn on a piece: a letter body, its dots, or an ornament / frame / signature to exclude.</summary>
@@ -27,6 +39,8 @@ public sealed class Segment
     [JsonPropertyName("brush")] public BrushTip? Brush { get; set; }
     /// <summary>Raw points as drawn (no smoothing): x, y, pressure (0 = mouse), milliseconds since the stroke began.</summary>
     [JsonPropertyName("stroke")] public List<double[]>? Stroke { get; set; }
+    /// <summary>Brush strokes: the smoothing used (0 accurate … 4 smooth); the raw points stay as drawn.</summary>
+    [JsonPropertyName("fidelity")] public int Fidelity { get; set; } = 4;
     /// <summary>Brush strokes: their order in the piece (1, 2, 3 …) — the calligrapher's sequence.</summary>
     [JsonPropertyName("order")] public int Order { get; set; }
     [JsonPropertyName("entry")] public double[]? Entry { get; set; }
@@ -55,8 +69,9 @@ public sealed class Annotation
 /// <summary>Versions written with every saved sample, so samples made by an older engine can be found and re-processed.</summary>
 public static class DataVersion
 {
-    /// <summary>1: polygons (browser version) · 2: + pen Bézier, brush strokes (x, y, pressure, ms), order, tashkeel, versions, split.</summary>
-    public const int Schema = 2;
+    /// <summary>1: polygons (browser version) · 2: + pen Bézier, brush strokes (x, y, pressure, ms), order, tashkeel, versions, split
+    /// · 3: + stroke fidelity (smoothing).</summary>
+    public const int Schema = 3;
     public static string Engine { get; set; } = "0.0.0";
 
     /// <summary>

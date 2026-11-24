@@ -85,7 +85,7 @@
     <sys:String x:Key="Hint.done">كل الحروف محددة ✓ — اضغط حفظ والتالي (S)</sys:String>
     <sys:String x:Key="Key.Enter">إغلاق الشكل</sys:String>
     <sys:String x:Key="Key.Back">حذف آخر نقطة</sys:String>
-    <sys:String x:Key="Key.Undo">حذف آخر منطقة</sys:String>
+    <sys:String x:Key="Key.Undo">تراجع / إعادة خطوة واحدة</sys:String>
     <sys:String x:Key="Key.Tab">تخطي الخطوة</sys:String>
     <sys:String x:Key="Key.S">حفظ والتالي</sys:String>
     <sys:String x:Key="Key.Wheel">تكبير / تصغير</sys:String>
@@ -164,4 +164,19 @@
     <sys:String x:Key="Let.DetailHint">مرّر الماوس على قصاصة: ✎ فتح مخطوطتها · 🗑 حذفها</sys:String>
     <sys:String x:Key="Ann.TestSet">مجموعة الاختبار — لا يُدرَّب عليها</sys:String>
     <sys:String x:Key="Ann.TestSetS">حوالي مخطوطة من كل 10 تُحجز لقياس تطور النموذج بموضوعية</sys:String>
+    <sys:String x:Key="Tool.PenSwitch">أداة القلم (1)</sys:String>
+    <sys:String x:Key="Tool.BrushSwitch">الفرشاة (6)</sys:String>
+    <sys:String x:Key="Brushes.Title">Brushes</sys:String>
+    <sys:String x:Key="Brushes.Add">فرشاة جديدة</sys:String>
+    <sys:String x:Key="Brushes.Edit">إعدادات الفرشاة…</sys:String>
+    <sys:String x:Key="Brushes.Duplicate">تكرار</sys:String>
+    <sys:String x:Key="Brushes.Hint">نقر مزدوج على الفرشاة لتعديلها · [ ] للحجم</sys:String>
+    <sys:String x:Key="Brushes.New">فرشاة خطية جديدة</sys:String>
+    <sys:String x:Key="Brushes.Options">إعدادات الفرشاة الخطية</sys:String>
+    <sys:String x:Key="Brushes.Name">الاسم</sys:String>
+    <sys:String x:Key="Brushes.Delete">حذف الفرشاة</sys:String>
+    <sys:String x:Key="Brushes.NewName">فرشاة {0}</sys:String>
+    <sys:String x:Key="Brush.Fidelity">الدقة والنعومة (Fidelity)</sys:String>
+    <sys:String x:Key="Brush.Accurate">دقيق</sys:String>
+    <sys:String x:Key="Brush.Smooth">ناعم</sys:String>
 </ResourceDictionary>

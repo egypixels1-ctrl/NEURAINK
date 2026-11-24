@@ -85,7 +85,7 @@
     <sys:String x:Key="Hint.done">All letters marked ✓ — press Save &amp; next (S)</sys:String>
     <sys:String x:Key="Key.Enter">Close the shape</sys:String>
     <sys:String x:Key="Key.Back">Remove last point</sys:String>
-    <sys:String x:Key="Key.Undo">Remove last region</sys:String>
+    <sys:String x:Key="Key.Undo">Undo / redo one step</sys:String>
     <sys:String x:Key="Key.Tab">Skip the step</sys:String>
     <sys:String x:Key="Key.S">Save &amp; next</sys:String>
     <sys:String x:Key="Key.Wheel">Zoom</sys:String>
@@ -164,4 +164,19 @@
     <sys:String x:Key="Let.DetailHint">Hover a cut-out: ✎ open its piece · 🗑 delete it</sys:String>
     <sys:String x:Key="Ann.TestSet">Test set — not for training</sys:String>
     <sys:String x:Key="Ann.TestSetS">About 1 piece in 10 is kept apart to measure the model fairly</sys:String>
+    <sys:String x:Key="Tool.PenSwitch">Pen tool (1)</sys:String>
+    <sys:String x:Key="Tool.BrushSwitch">Brush (6)</sys:String>
+    <sys:String x:Key="Brushes.Title">Brushes</sys:String>
+    <sys:String x:Key="Brushes.Add">New brush</sys:String>
+    <sys:String x:Key="Brushes.Edit">Brush options…</sys:String>
+    <sys:String x:Key="Brushes.Duplicate">Duplicate</sys:String>
+    <sys:String x:Key="Brushes.Hint">Double-click a brush to edit it · [ ] size</sys:String>
+    <sys:String x:Key="Brushes.New">New calligraphic brush</sys:String>
+    <sys:String x:Key="Brushes.Options">Calligraphic brush options</sys:String>
+    <sys:String x:Key="Brushes.Name">Name</sys:String>
+    <sys:String x:Key="Brushes.Delete">Delete brush</sys:String>
+    <sys:String x:Key="Brushes.NewName">Brush {0}</sys:String>
+    <sys:String x:Key="Brush.Fidelity">Fidelity</sys:String>
+    <sys:String x:Key="Brush.Accurate">Accurate</sys:String>
+    <sys:String x:Key="Brush.Smooth">Smooth</sys:String>
 </ResourceDictionary>

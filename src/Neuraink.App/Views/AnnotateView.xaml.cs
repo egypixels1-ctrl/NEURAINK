@@ -37,7 +37,12 @@ public partial class AnnotateView : UserControl
     {
         if (_vm != null) { _vm.Redraw -= Draw; _vm.Opened -= OnOpened; }
         _vm = vm;
-        if (_vm != null) { _vm.Redraw += Draw; _vm.Opened += OnOpened; Draw(); }
+        if (_vm != null)
+        {
+            _vm.Redraw += Draw; _vm.Opened += OnOpened;
+            _vm.EditBrushDialog = BrushOptionsWindow.Show;
+            Draw();
+        }
     }
 
     private void OnOpened() => Dispatcher.BeginInvoke(() => { Fit(); Focus(); }, System.Windows.Threading.DispatcherPriority.Loaded);
@@ -119,7 +124,7 @@ public partial class AnnotateView : UserControl
             if ((p - _downAt).Length * _zoom > 3) _vm.DragHandles(_dragNode, p);
             return;
         }
-        if (_vm.Drawing.Count > 0) Draw();   // rubber band to the mouse
+        Draw();   // rubber band and pen cursor follow the mouse
     }
 
     private void OnOverlayUp(object sender, MouseButtonEventArgs e)
@@ -133,6 +138,32 @@ public partial class AnnotateView : UserControl
         if (Overlay.IsMouseCaptured) Overlay.ReleaseMouseCapture();
     }
 
+    private void OnOverlayLeave(object sender, MouseEventArgs e)
+    {
+        if (_stroking || _dragNode != null) return;
+        _mouse = null;
+        Draw();
+    }
+
+    // ------------------------------------------------------------------ Brushes panel
+    private void OnBrushClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_vm == null || (sender as FrameworkElement)?.DataContext is not BrushItem b) return;
+        if (e.ClickCount >= 2) _vm.EditBrushCommand.Execute(b);
+        else _vm.SelectBrushCommand.Execute(b);
+        e.Handled = true;
+    }
+
+    private void OnBrushEditMenu(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is BrushItem b) _vm?.EditBrushCommand.Execute(b);
+    }
+
+    private void OnBrushDuplicateMenu(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is BrushItem b) _vm?.DuplicateBrushCommand.Execute(b);
+    }
+
     // ------------------------------------------------------------------ input: hand tool (hold Space, or the middle button)
     private bool _space, _panning;
     private Point _panFrom;
@@ -140,7 +171,7 @@ public partial class AnnotateView : UserControl
 
     private void SetHand(bool on)
     {
-        Overlay.Cursor = on ? Cursors.Hand : _vm?.IsBrushTool == true ? Cursors.Cross : Cursors.Pen;
+        Overlay.Cursor = on ? Cursors.Hand : _vm?.Tool is "entry" or "exit" ? Cursors.Cross : Cursors.None;
         Scroller.Cursor = on ? Cursors.Hand : null;
     }
 
@@ -188,7 +219,11 @@ public partial class AnnotateView : UserControl
             case Key.Back: _vm.BackspacePoint(); break;
             case Key.Escape: _vm.CancelDrawing(); break;
             case Key.Tab: _vm.SkipStep(); break;
-            case Key.Z when ctrl: _vm.Undo(); break;
+            case Key.Z when ctrl && (Keyboard.Modifiers & ModifierKeys.Shift) != 0: _vm.RedoStep(); break;
+            case Key.Z when ctrl: _vm.UndoStep(); break;
+            case Key.Y when ctrl: _vm.RedoStep(); break;
+            case Key.OemOpenBrackets: _vm.BrushSize = Math.Max(2, _vm.BrushSize - (_vm.BrushSize > 20 ? 4 : 1)); break;
+            case Key.OemCloseBrackets: _vm.BrushSize = _vm.BrushSize + (_vm.BrushSize >= 20 ? 4 : 1); break;
             case Key.OemPlus or Key.Add when ctrl: SetZoom(_zoom * 1.25); break;
             case Key.OemMinus or Key.Subtract when ctrl: SetZoom(_zoom / 1.25); break;
             case Key.D0 or Key.NumPad0 when ctrl: Fit(); break;
@@ -222,7 +257,7 @@ public partial class AnnotateView : UserControl
         Overlay.Width = img.PixelWidth;
         Overlay.Height = img.PixelHeight;
         double px = 1 / _zoom;   // one screen pixel in picture units
-        if (!_space && !_panning) Overlay.Cursor = _vm.IsBrushTool ? Cursors.Cross : Cursors.Pen;
+        if (!_space && !_panning) Overlay.Cursor = _vm.Tool is "entry" or "exit" ? Cursors.Cross : Cursors.None;
 
         foreach (var s in _vm.Ann.Segments)
         {
@@ -253,7 +288,7 @@ public partial class AnnotateView : UserControl
             bool on = s.Kind is "ornament" or "diacritic" || s.Chip == _vm.Active;
             Overlay.Children.Add(new Shapes.Path
             {
-                Data = StrokeGeometry.Build(s.Stroke!, s.Brush!),
+                Data = StrokeGeometry.Build(s.Stroke!, s.Brush!, s.Fidelity),
                 Fill = new SolidColorBrush(Color.FromArgb((byte)(on ? 200 : 150), c.R, c.G, c.B)),
                 IsHitTestVisible = false,
             });
@@ -263,7 +298,7 @@ public partial class AnnotateView : UserControl
             var c = _vm.BrushColor;
             Overlay.Children.Add(new Shapes.Path
             {
-                Data = StrokeGeometry.Build(_vm.CurrentStroke, _vm.Tip),
+                Data = StrokeGeometry.Build(_vm.CurrentStroke, _vm.Tip, _vm.Fidelity),
                 Fill = new SolidColorBrush(Color.FromArgb(210, c.R, c.G, c.B)),
                 IsHitTestVisible = false,
             });
@@ -311,6 +346,21 @@ public partial class AnnotateView : UserControl
                 Square(n.A.X, n.A.Y, (i == 0 ? 5 : 3.5) * px, i == 0 ? Colors.White : c, c, px);
             }
         }
+        if (_vm.IsPenTool && _mouse is { } pm && !_space && !_panning && _dragNode == null) PenCursor(pm, px);
+    }
+
+    /// <summary>The pen tool cursor: the fountain-pen nib of Illustrator, its tip on the mouse.</summary>
+    private void PenCursor(Point m, double px)
+    {
+        if (TryFindResource("PenNibGeometry") is not Geometry nib) return;
+        var g = nib.Clone();
+        var t = new TransformGroup();
+        t.Children.Add(new TranslateTransform(-12, -1.5));          // the tip of the nib on the hot spot
+        t.Children.Add(new RotateTransform(-45));                   // pointing up-left, like Illustrator
+        t.Children.Add(new ScaleTransform(px * 0.95, px * 0.95));   // about 23 screen pixels at any zoom
+        t.Children.Add(new TranslateTransform(m.X, m.Y));
+        g.Transform = t;
+        Overlay.Children.Add(new Shapes.Path { Data = g, Fill = Brushes.Black, Stroke = Brushes.White, StrokeThickness = 1.1 * px, IsHitTestVisible = false });
     }
 
     /// <summary>An anchor: a small square, like Illustrator.</summary>

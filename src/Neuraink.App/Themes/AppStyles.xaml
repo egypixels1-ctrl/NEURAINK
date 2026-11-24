@@ -76,4 +76,14 @@
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="FlowDirection" Value="LeftToRight" />
     </Style>
+    <!-- Illustrator-style tool icons (24 × 24) -->
+    <Geometry x:Key="PenNibGeometry">M12,1.5 L17.2,10.6 Q18.3,12.8 16.8,15 L15.6,17 L8.4,17 L7.2,15 Q5.7,12.8 6.8,10.6 Z M8,18.4 L16,18.4 L16,21.4 L8,21.4 Z</Geometry>
+    <Geometry x:Key="PaintBrushGeometry">M19.6,2.6 L21.4,4.4 L12.6,13.6 L10.4,11.4 Z M10.4,11.4 L12.6,13.6 L11,15.2 Q10.4,18.6 6.6,20.3 Q4.6,21.2 2.6,21.4 Q4.4,19.6 4.8,17.4 Q5.6,13.4 8.8,13 Z</Geometry>
+    <Style x:Key="ToolSwitch" TargetType="Button">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
 </ResourceDictionary>

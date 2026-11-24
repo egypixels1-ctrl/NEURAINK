@@ -46,7 +46,8 @@ public sealed class AllTrueToVisibilityConverter : IMultiValueConverter
 public sealed class NibHeightConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is double r ? Math.Max(2.5, 20 * r) : 20.0;
+        value is double r ? Math.Max(2.5, Width(parameter) * r) : Width(parameter);
+    private static double Width(object p) => p != null && double.TryParse(p.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var w) ? w : 20;
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
 

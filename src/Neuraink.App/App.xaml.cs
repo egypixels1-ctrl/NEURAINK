@@ -60,6 +60,14 @@ public partial class App : Application
                 vm.Go(vm.Annotate);
                 Dispatcher.BeginInvoke(() => DemoBrush(vm.Annotate), DispatcherPriority.ContextIdle);
                 break;
+            case "brush-options":
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    vm.Annotate.SetToolByKey(6);
+                    new Views.BrushOptionsWindow(vm.Annotate.Tip.Copy(), false) { Owner = window }.Show();
+                }, DispatcherPriority.ContextIdle);
+                break;
             case "colorpicker":
                 vm.Go(vm.SettingsPage);
                 Dispatcher.BeginInvoke(() => new Views.ColorPickerWindow(System.Windows.Media.Color.FromRgb(0x7C, 0x5C, 0xFF)) { Owner = window }.Show(),

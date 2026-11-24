@@ -31,6 +31,21 @@ public sealed class PenNode
     public Point? Out { get; set; }
 }
 
+/// <summary>A row of the Brushes panel.</summary>
+public sealed partial class BrushItem : ObservableObject
+{
+    public required BrushTip Tip { get; init; }
+    public required int Index { get; init; }
+    public string Name => Tip.Name;
+    public double Angle => Tip.Angle;
+    public double Roundness => Tip.Roundness;
+    public string Details => $"{Tip.Angle:0}° · {Tip.Roundness * 100:0}% · {Tip.Size:0}";
+    [ObservableProperty] private bool _isSelected;
+}
+
+/// <summary>Result of the Brush Options window.</summary>
+public sealed record BrushEdit(BrushTip Tip, bool Delete);
+
 public sealed class SegmentRow
 {
     public required Segment Segment { get; init; }
@@ -95,6 +110,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
             new ToolItem { Key = "ornament", Shortcut = "8", Brush = Frozen(OrnamentColor) },
         ];
         Tools[0].IsActive = true;
+        LoadBrushes();
         LanguageService.Changed += () => { if (Item != null) { RebuildChips(); UpdateHint(); } };
     }
 
@@ -178,6 +194,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Title = $"#{item.Id}";
         FileInfo = item.File;
         Drawing.Clear();
+        _undo.Clear(); _redo.Clear();
         Image = Images.Load(_main.Library.FullPath(item.Png));
         Original = _main.Settings.ShowOriginal ? Images.Load(_main.Library.FullPath(item.Thumb), 320) : null;
         OnPropertyChanged(nameof(ShowOriginal));
@@ -209,6 +226,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     partial void OnTextChanged(string value)
     {
         if (_settingText || Item == null) return;
+        Checkpoint();
         Ann.Text = (value ?? "").Trim();
         var letters = Arabic.Letters(Ann.Text);
         // keep the regions that still match the same letter at the same place
@@ -281,8 +299,10 @@ public sealed partial class AnnotateViewModel : ObservableObject
     partial void OnToolChanged(string value)
     {
         foreach (var t in Tools) t.IsActive = t.Key == value;
+        if (_restoring) { OnPropertyChanged(nameof(IsBrushTool)); OnPropertyChanged(nameof(IsPenTool)); UpdateHint(); return; }
         CurrentStroke.Clear();
         OnPropertyChanged(nameof(IsBrushTool));
+        OnPropertyChanged(nameof(IsPenTool));
         Drawing.Clear();
         UpdateHint();
         Redraw?.Invoke();
@@ -297,12 +317,14 @@ public sealed partial class AnnotateViewModel : ObservableObject
         {
             var b = Body(Active);
             if (b == null) { ShowToast(Loc.T("Ann.NeedBody")); return; }
+            Checkpoint();
             var pt = new[] { Math.Round(p.X, 1), Math.Round(p.Y, 1) };
             if (Tool == "entry") { b.Entry = pt; b.EntrySkipped = false; } else { b.Exit = pt; b.ExitSkipped = false; }
             Advance();
             return;
         }
         if (Drawing.Count >= 3 && (Drawing[0].A - p).Length < closeRadius) { CloseShape(); return; }
+        Checkpoint();
         Drawing.Add(new PenNode { A = p });
         Redraw?.Invoke();
     }
@@ -314,6 +336,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public PenNode? AddAnchor(Point p)
     {
         if (Item == null || Tool is "entry" or "exit") return null;
+        Checkpoint();
         var n = new PenNode { A = p };
         Drawing.Add(n);
         Redraw?.Invoke();
@@ -356,6 +379,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public void CloseShape()
     {
         if (Drawing.Count < 3) return;
+        Checkpoint();
         var pts = Flatten(Drawing, closed: true).Select(d => new[] { Math.Round(d.X, 1), Math.Round(d.Y, 1) }).ToList();
         // the pen path itself: anchor x, y, in-handle x, y, out-handle x, y (the vector outline for later)
         var bez = Drawing.Select(d => new[]
@@ -403,16 +427,34 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public List<double[]> CurrentStroke { get; } = [];
     private readonly System.Diagnostics.Stopwatch _strokeClock = new();
     private int _strokeOrder;
-    public BrushTip Tip => _main.Settings.Brush;
-    public List<BrushTip> BrushPresets { get; } = [.. Presets];
+    // ---- Brushes panel (like Illustrator): a list of named brushes; double-click edits, + adds
+    public ObservableCollection<BrushItem> BrushList { get; } = [];
+    public BrushTip Tip
+    {
+        get
+        {
+            var b = _main.Settings.Brushes;
+            if (b.Count == 0) b.AddRange(BrushTip.Defaults());
+            return b[Math.Clamp(_main.Settings.BrushIndex, 0, b.Count - 1)];
+        }
+    }
     public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
-    public double BrushAngle { get => Tip.Angle; set { Tip.Angle = Math.Clamp(Math.Round(value), 0, 180); Tip.Name = ""; OnPropertyChanged(); SaveBrush(); } }
-    public double BrushRoundness { get => Math.Round(Tip.Roundness * 100); set { Tip.Roundness = Math.Clamp(value / 100, 0.02, 1); Tip.Name = ""; OnPropertyChanged(); SaveBrush(); } }
+    public int Fidelity { get => _main.Settings.Fidelity; set { _main.Settings.Fidelity = Math.Clamp(value, 0, 4); OnPropertyChanged(); _main.SaveSettings(); Redraw?.Invoke(); } }
     public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
     public double PictureOpacity { get => Math.Round(_main.Settings.PictureOpacity * 100); set { _main.Settings.PictureOpacity = Math.Clamp(value / 100, 0.05, 1); OnPropertyChanged(); OnPropertyChanged(nameof(PictureOpacityValue)); _main.SaveSettings(); } }
     public double PictureOpacityValue => _main.Settings.PictureOpacity;
     public bool IsBrushTool => Tool is "brush" or "ornament" or "diacritic";
+    public bool IsPenTool => !IsBrushTool && Tool is not ("entry" or "exit");
     public Color BrushColor => Tool switch { "ornament" => OrnamentColor, "diacritic" => DiacriticColor, _ => ChipColor(Active) };
+
+    public void LoadBrushes()
+    {
+        BrushList.Clear();
+        var list = _main.Settings.Brushes;
+        if (list.Count == 0) list.AddRange(BrushTip.Defaults());
+        for (int i = 0; i < list.Count; i++) BrushList.Add(new BrushItem { Tip = list[i], Index = i, IsSelected = i == _main.Settings.BrushIndex });
+        OnPropertyChanged(nameof(BrushSize));
+    }
 
     private DateTime _lastBrushSave;
     private void SaveBrush()
@@ -424,18 +466,131 @@ public sealed partial class AnnotateViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void PickPreset(BrushTip? p)
+    private void SelectBrush(BrushItem? b)
     {
-        if (p == null) return;
-        Tip.Angle = p.Angle; Tip.Roundness = p.Roundness; Tip.Name = p.Name;
-        OnPropertyChanged(nameof(BrushAngle)); OnPropertyChanged(nameof(BrushRoundness));
+        if (b == null) return;
+        _main.Settings.BrushIndex = b.Index;
+        foreach (var x in BrushList) x.IsSelected = x == b;
+        OnPropertyChanged(nameof(BrushSize));
         _main.SaveSettings();
+        if (!IsBrushTool) Tool = "brush";
         Redraw?.Invoke();
+    }
+
+    /// <summary>Brush Options window (double-click or a new brush). Returns false when cancelled.</summary>
+    public Func<BrushTip, bool, BrushEdit?>? EditBrushDialog { get; set; }
+
+    [RelayCommand]
+    private void EditBrush(BrushItem? b)
+    {
+        if (b == null || EditBrushDialog == null) return;
+        var r = EditBrushDialog(b.Tip.Copy(), false);
+        if (r == null) return;
+        var list = _main.Settings.Brushes;
+        if (r.Delete && list.Count > 1)
+        {
+            list.RemoveAt(b.Index);
+            _main.Settings.BrushIndex = Math.Clamp(_main.Settings.BrushIndex >= b.Index ? _main.Settings.BrushIndex - 1 : _main.Settings.BrushIndex, 0, list.Count - 1);
+        }
+        else if (!r.Delete)
+        {
+            list[b.Index] = r.Tip;
+            _main.Settings.BrushIndex = b.Index;
+        }
+        _main.SaveSettings();
+        LoadBrushes();
+        Redraw?.Invoke();
+    }
+
+    [RelayCommand]
+    private void AddBrush()
+    {
+        if (EditBrushDialog == null) return;
+        var n = _main.Settings.Brushes.Count + 1;
+        var fresh = new BrushTip { Name = Loc.F("Brushes.NewName", n), Size = Tip.Size, Angle = 45, Roundness = BrushTip.DefaultRoundness };
+        var r = EditBrushDialog(fresh, true);
+        if (r == null || r.Delete) return;
+        _main.Settings.Brushes.Add(r.Tip);
+        _main.Settings.BrushIndex = _main.Settings.Brushes.Count - 1;
+        _main.SaveSettings();
+        LoadBrushes();
+        if (!IsBrushTool) Tool = "brush";
+        Redraw?.Invoke();
+    }
+
+    [RelayCommand]
+    private void DuplicateBrush(BrushItem? b)
+    {
+        if (b == null) return;
+        var c = b.Tip.Copy();
+        c.Name += " 2";
+        _main.Settings.Brushes.Insert(b.Index + 1, c);
+        _main.Settings.BrushIndex = b.Index + 1;
+        _main.SaveSettings();
+        LoadBrushes();
+    }
+
+    [RelayCommand] private void UsePen() => Tool = "letter";
+    [RelayCommand] private void UseBrush() => Tool = "brush";
+
+    [RelayCommand]
+    private void ToggleOriginal()
+    {
+        _main.Settings.ShowOriginal = !_main.Settings.ShowOriginal;
+        _main.SaveSettings();
+        if (_main.Settings.ShowOriginal && Original == null && Item != null) Original = Images.Load(_main.Library.FullPath(Item.Thumb), 320);
+        OnPropertyChanged(nameof(ShowOriginal));
+    }
+
+    // ------------------------------------------------------------------ undo / redo (one step at a time)
+    private bool _restoring;
+    private sealed record Snapshot(string Segments, List<PenNode> Drawing, int Active, string Tool, string Text);
+    private readonly Stack<Snapshot> _undo = new(), _redo = new();
+    private static readonly System.Text.Json.JsonSerializerOptions SnapJson = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+
+    private Snapshot Take() => new(
+        System.Text.Json.JsonSerializer.Serialize(Ann.Segments, SnapJson),
+        Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }).ToList(), Active, Tool, Ann.Text);
+
+    /// <summary>Remembers the state before a change (Ctrl+Z goes back to it).</summary>
+    public void Checkpoint()
+    {
+        _undo.Push(Take());
+        if (_undo.Count > 300) { var keep = _undo.Take(200).Reverse().ToList(); _undo.Clear(); foreach (var k in keep) _undo.Push(k); }
+        _redo.Clear();
+    }
+
+    private void Restore(Snapshot s)
+    {
+        Ann.Segments = System.Text.Json.JsonSerializer.Deserialize<List<Segment>>(s.Segments, SnapJson) ?? [];
+        Drawing.Clear();
+        Drawing.AddRange(s.Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }));
+        if (s.Text != Ann.Text) { Ann.Text = s.Text; _settingText = true; Text = s.Text; _settingText = false; RebuildChips(); }
+        Active = Math.Min(s.Active, Math.Max(0, Chips.Count - 1));
+        _restoring = true;
+        Tool = s.Tool;
+        _restoring = false;
+        Refresh();
+    }
+
+    public void UndoStep()
+    {
+        if (_undo.Count == 0) return;
+        _redo.Push(Take());
+        Restore(_undo.Pop());
+    }
+
+    public void RedoStep()
+    {
+        if (_redo.Count == 0) return;
+        _undo.Push(Take());
+        Restore(_redo.Pop());
     }
 
     public void BeginStroke(Point p, double pressure)
     {
         if (Item == null || !IsBrushTool) return;
+        Checkpoint();
         CurrentStroke.Clear();
         _strokeClock.Restart();
         CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), 0]);
@@ -459,11 +614,11 @@ public sealed partial class AnnotateViewModel : ObservableObject
         CurrentStroke.Clear();
         var c = ChipAt(Active);
         if (Tool == "ornament")
-            Ann.Segments.Add(new Segment { Kind = "ornament", Order = ++_strokeOrder, Brush = Tip.Copy(), Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "ornament", Order = ++_strokeOrder, Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts });
         else if (Tool == "diacritic" && c != null)   // linguistic tashkeel belongs to its letter
-            Ann.Segments.Add(new Segment { Kind = "diacritic", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "diacritic", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts });
         else if (c != null)
-            Ann.Segments.Add(new Segment { Kind = "stroke", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Stroke = pts });
+            Ann.Segments.Add(new Segment { Kind = "stroke", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts });
         if (Tool == "brush" && !stay && AutoNextLetter && Chips.Count > 0)
         {
             for (int k = 1; k <= Chips.Count; k++)
@@ -477,17 +632,12 @@ public sealed partial class AnnotateViewModel : ObservableObject
 
     public void BackspacePoint()
     {
-        if (Drawing.Count > 0) { Drawing.RemoveAt(Drawing.Count - 1); Redraw?.Invoke(); }
+        if (Drawing.Count > 0) { Checkpoint(); Drawing.RemoveAt(Drawing.Count - 1); Redraw?.Invoke(); }
     }
 
     public void CancelDrawing() { Drawing.Clear(); Redraw?.Invoke(); }
 
-    public void Undo()
-    {
-        if (Drawing.Count > 0) Drawing.Clear();
-        else if (Ann.Segments.Count > 0) Ann.Segments.RemoveAt(Ann.Segments.Count - 1);
-        Refresh();
-    }
+    public void Undo() => UndoStep();
 
     /// <summary>Tab: skip the entry / exit of this letter, or move to the next letter.</summary>
     public void SkipStep()
@@ -525,12 +675,14 @@ public sealed partial class AnnotateViewModel : ObservableObject
     [RelayCommand] private void DeleteSegment(SegmentRow? row)
     {
         if (row == null) return;
+        Checkpoint();
         Ann.Segments.Remove(row.Segment);
         Refresh();
     }
 
     [RelayCommand] private void ClearAll()
     {
+        Checkpoint();
         Ann.Segments.Clear();
         Drawing.Clear();
         Active = 0;

@@ -58,6 +58,7 @@ jobs:
           Run 'Arabic'  'Dark'  'library'        '02-library-ar'
           Run 'Arabic'  'Dark'  'annotate-demo'  '03-annotate-ar'
           Run 'Arabic'  'Dark'  'annotate-brush' '03b-annotate-brush-ar'
+          Run 'English' 'Dark'  'brush-options'  '03c-brush-options'
           Run 'Arabic'  'Dark'  'annotate-save'  '04-annotate-saved-ar'
           Run 'Arabic'  'Dark'  'letters'        '05-letters-ar'
           Run 'Arabic'  'Dark'  'letters-detail' '05b-letter-detail-ar'
