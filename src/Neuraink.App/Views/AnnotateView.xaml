@@ -68,7 +68,7 @@
 
                     <!-- hint -->
                     <Border Style="{StaticResource Card}" Padding="12,8" Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top" MaxWidth="620"
-                            Background="{DynamicResource AcrylicBackgroundFillColorDefaultBrush}"
+                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" Opacity="0.95"
                             Visibility="{Binding Hint, Converter={StaticResource NonEmptyToVis}}">
                         <TextBlock Text="{Binding Hint}" TextWrapping="Wrap" FlowDirection="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                     </Border>
