@@ -11,6 +11,8 @@
             <Setter Property="Margin" Value="0,0,0,6" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
     </UserControl.Resources>
     <DockPanel>
@@ -287,7 +289,7 @@
                                 <!-- folds the panel away (its width is dragged on its edge) -->
                                 <Button x:Name="FoldPanel" DockPanel.Dock="Left" Click="OnFoldPanel" Padding="5,3" Margin="0,0,8,0" VerticalAlignment="Center"
                                         ToolTip="{DynamicResource Panel.Fold}" Focusable="False">
-                                    <TextBlock x:Name="FoldGlyph" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="11" />
+                                    <Path Data="M2,1 L6,5 L2,9" Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10" />
                                 </Button>
                                 <TextBlock Text="{DynamicResource Ann.Text}" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
                             </DockPanel>
@@ -534,7 +536,7 @@
             <!-- folded: a slim bar with the arrow that opens it again -->
             <Border x:Name="PanelFolded" Grid.Column="4" Style="{StaticResource Card}" Padding="3,8" CornerRadius="10" Visibility="Collapsed" VerticalAlignment="Stretch">
                 <Button Click="OnFoldPanel" Padding="5,4" VerticalAlignment="Top" HorizontalAlignment="Center" ToolTip="{DynamicResource Panel.Open}" Focusable="False">
-                    <TextBlock x:Name="UnfoldGlyph" Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="11" />
+                    <Path Data="M6,1 L2,5 L6,9" Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10" />
                 </Button>
             </Border>
         </Grid>

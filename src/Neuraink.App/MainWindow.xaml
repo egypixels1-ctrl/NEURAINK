@@ -51,31 +51,8 @@
                            HorizontalAlignment="Center" ToolTip="NEURAINK" />
                     <Button Command="{Binding ToggleNavCommand}" Padding="8,5" Margin="0,14,0,0" HorizontalAlignment="Center" Focusable="False"
                             ToolTip="{DynamicResource Nav.Expand}">
-                        <Grid>
-                            <TextBlock Text="&#xE76C;" FontSize="11">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <TextBlock Text="&#xE76B;" FontSize="11">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
+                        <!-- a drawn chevron: mirrored with the layout in Arabic -->
+                        <Path Data="M2,1 L6,5 L2,9" Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10" />
                     </Button>
                 </StackPanel>
 
@@ -104,10 +81,7 @@
                                     <Button x:Name="Fold" DockPanel.Dock="Right" Padding="5,2" Margin="6,0,0,0" VerticalAlignment="Center" Focusable="False" Visibility="Collapsed"
                                             Command="{Binding DataContext.ToggleNavCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Background="Transparent" BorderThickness="0" ToolTip="{DynamicResource Nav.Collapse}">
-                                        <Grid>
-                                            <TextBlock x:Name="FoldLtr" Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="10" Opacity="0.75" />
-                                            <TextBlock x:Name="FoldRtl" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="10" Opacity="0.75" Visibility="Collapsed" />
-                                        </Grid>
+                                        <Path Data="M6,1 L2,5 L6,9" Stroke="{DynamicResource TextFillColorSecondaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10" />
                                     </Button>
                                     <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Padding="7,0"
                                             Visibility="{Binding IsSoon, Converter={StaticResource BoolToVis}}">
@@ -124,10 +98,6 @@
                             <DataTemplate.Triggers>
                                 <DataTrigger Binding="{Binding IsFirst}" Value="True">
                                     <Setter TargetName="Fold" Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
-                                    <Setter TargetName="FoldLtr" Property="Visibility" Value="Collapsed" />
-                                    <Setter TargetName="FoldRtl" Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding DataContext.NavCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                     <Setter TargetName="Full" Property="Visibility" Value="Collapsed" />

@@ -146,10 +146,6 @@ public partial class AnnotateView : UserControl
         PanelCol.Width = new GridLength(folded ? PanelSlim : Math.Clamp(st.SidePanelWidth, PanelMin, PanelMax));
         PanelScroll.Visibility = folded ? Visibility.Collapsed : Visibility.Visible;
         PanelFolded.Visibility = folded ? Visibility.Visible : Visibility.Collapsed;
-        // the arrows point the way the panel goes: towards the edge of the window, or back from it
-        bool rtl = FlowDirection == FlowDirection.RightToLeft;
-        FoldGlyph.Text = rtl ? "\uE76B" : "\uE76C";     // » fold (towards the edge)
-        UnfoldGlyph.Text = rtl ? "\uE76C" : "\uE76B";   // « open again
         _dragWidth = PanelCol.Width.Value;
     }
 
