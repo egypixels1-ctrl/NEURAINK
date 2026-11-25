@@ -134,7 +134,7 @@ public partial class AnnotateView : UserControl
     }
 
     // ------------------------------------------------------------------ the side panel: its width is dragged on its edge; folded to a slim bar
-    private const double PanelNormal = 340, PanelMin = 260, PanelMax = 620, PanelFoldAt = 200, PanelFolded = 40;
+    private const double PanelNormal = 340, PanelMin = 260, PanelMax = 620, PanelFoldAt = 200, PanelSlim = 40;
     private double _dragWidth;
 
     private Neuraink.Core.AppSettings? Settings => MainViewModel.Current?.Settings;
@@ -143,7 +143,7 @@ public partial class AnnotateView : UserControl
     {
         if (Settings is not { } st) return;
         bool folded = st.SidePanelCollapsed;
-        PanelCol.Width = new GridLength(folded ? PanelFolded : Math.Clamp(st.SidePanelWidth, PanelMin, PanelMax));
+        PanelCol.Width = new GridLength(folded ? PanelSlim : Math.Clamp(st.SidePanelWidth, PanelMin, PanelMax));
         PanelScroll.Visibility = folded ? Visibility.Collapsed : Visibility.Visible;
         PanelFolded.Visibility = folded ? Visibility.Visible : Visibility.Collapsed;
         // the arrows point the way the panel goes: towards the edge of the window, or back from it
