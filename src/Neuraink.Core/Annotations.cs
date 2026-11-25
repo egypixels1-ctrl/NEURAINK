@@ -46,6 +46,15 @@ public sealed class Segment
     /// per curve x0, y0, x1, y1, x2, y2, x3, y3, pressure at the start, pressure at the end.
     /// </summary>
     [JsonPropertyName("fit")] public List<double[]>? Fit { get; set; }
+    /// <summary>
+    /// The hand exactly as it moved, when <see cref="Stroke"/> no longer is: the stroke followed StreamLine (live smoothing),
+    /// or was edited afterwards (anchors dragged, a part redrawn). Same format as <see cref="Stroke"/>.
+    /// </summary>
+    [JsonPropertyName("raw")] public List<double[]>? Raw { get; set; }
+    /// <summary>Brush strokes: the StreamLine used while drawing (0 … 100 %).</summary>
+    [JsonPropertyName("streamline")] public int StreamLine { get; set; }
+    /// <summary>Brush strokes: edited after drawing (anchors or a redrawn part).</summary>
+    [JsonPropertyName("edited")] public bool Edited { get; set; }
     /// <summary>Brush strokes: the smoothing used (0 accurate … 4 smooth); the raw points stay as drawn.</summary>
     [JsonPropertyName("fidelity")] public int Fidelity { get; set; } = 4;
     /// <summary>Brush strokes: their order in the piece (1, 2, 3 …) — the calligrapher's sequence.</summary>
@@ -77,8 +86,9 @@ public sealed class Annotation
 public static class DataVersion
 {
     /// <summary>1: polygons (browser version) · 2: + pen Bézier, brush strokes (x, y, pressure, ms), order, tashkeel, versions, split
-    /// · 3: + stroke fidelity (smoothing) · 4: + fitted Bézier curves per stroke, artboards (handwritten pieces).</summary>
-    public const int Schema = 4;
+    /// · 3: + stroke fidelity (smoothing) · 4: + fitted Bézier curves per stroke, artboards (handwritten pieces)
+    /// · 5: strokes fitted as a smooth spline, StreamLine, raw hand kept apart from an edited stroke.</summary>
+    public const int Schema = 5;
     public static string Engine { get; set; } = "0.0.0";
 
     /// <summary>

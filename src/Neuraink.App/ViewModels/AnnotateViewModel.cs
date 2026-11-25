@@ -51,6 +51,40 @@ public sealed partial class BrushItem : ObservableObject
 /// <summary>Result of the Brush Options window.</summary>
 public sealed record BrushEdit(BrushTip Tip, bool Delete);
 
+/// <summary>The work saved for undo: the regions and strokes, the open pen path, the letter, the tool and the text.</summary>
+public sealed record Snapshot(string Segments, List<PenNode> Drawing, int Active, string Tool, string Text);
+
+/// <summary>
+/// A piece open in a tab (like Illustrator documents): each tab keeps its own work, undo history, zoom and scroll while
+/// another one is in front.
+/// </summary>
+public sealed partial class DocTab : ObservableObject
+{
+    [ObservableProperty] private int _id;
+    [ObservableProperty] private string _text = "";
+    [ObservableProperty] private bool _isDirty;
+    [ObservableProperty] private bool _isActive;
+    /// <summary>Zoom of the picture (1 = 100 %); 0 = fit it when shown.</summary>
+    [ObservableProperty] private double _zoom;
+    [ObservableProperty] private string _fileInfo = "";
+    public double ScrollH { get; set; }
+    public double ScrollV { get; set; }
+    public string IdText => $"#{Id}";
+    public string ZoomText => Zoom > 0 ? $"@ {Zoom * 100:0}%" : "";
+    partial void OnIdChanged(int value) => OnPropertyChanged(nameof(IdText));
+    partial void OnZoomChanged(double value) => OnPropertyChanged(nameof(ZoomText));
+
+    // the work kept while another tab is in front (null: not opened yet — read from the disk)
+    internal Annotation? Ann { get; set; }
+    internal List<PenNode> Drawing { get; set; } = [];
+    internal Stack<Snapshot> Undo { get; } = new();
+    internal Stack<Snapshot> Redo { get; } = new();
+    internal Stack<int> History { get; } = new();
+    internal int Active { get; set; }
+    internal string Tool { get; set; } = "letter";
+    internal int StrokeOrder { get; set; }
+}
+
 public sealed class SegmentRow
 {
     public required Segment Segment { get; init; }
@@ -97,7 +131,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     ];
 
     private readonly MainViewModel _main;
-    private readonly Stack<int> _history = new();
+    private Stack<int> _history = new();
     private bool _settingText;
 
     public AnnotateViewModel(MainViewModel main)
@@ -171,35 +205,225 @@ public sealed partial class AnnotateViewModel : ObservableObject
 
     public Color ColorOf(Segment s) => s.Kind switch { "exclude" => ExcludeColor, "ornament" => OrnamentColor, "diacritic" => DiacriticColor, _ => ChipColor(s.Chip) };
 
+    // ------------------------------------------------------------------ tabs (like Illustrator documents)
+    public ObservableCollection<DocTab> Tabs { get; } = [];
+    [ObservableProperty] private DocTab? _currentTab;
+    /// <summary>Every tab is closed.</summary>
+    [ObservableProperty] private bool _noTabs;
+    /// <summary>The view writes its zoom and scroll into the tab before another one comes to the front.</summary>
+    public event Action<DocTab>? SavingView;
+
+    partial void OnCurrentTabChanged(DocTab? value)
+    {
+        foreach (var t in Tabs) t.IsActive = t == value;
+    }
+
+    private Stack<Snapshot> _undo = new(), _redo = new();
+
+    private DocTab NewTab(int id) => new() { Id = id, Text = _main.GetItem(id)?.Text ?? "" };
+
+    /// <summary>The work of the tab in front is kept in it (another tab comes to the front).</summary>
+    private void Stash()
+    {
+        if (CurrentTab is not { } t) return;
+        SavingView?.Invoke(t);
+        if (Item == null) return;
+        t.Ann = Ann;
+        t.Drawing = Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }).ToList();
+        t.Active = Active;
+        t.Tool = Tool;
+        t.StrokeOrder = _strokeOrder;
+        CurrentStroke.Clear();
+        SelectedOrder = 0;
+    }
+
+    /// <summary>Brings a tab to the front, with its work as it was left.</summary>
+    [RelayCommand]
+    public void Activate(DocTab? tab)
+    {
+        if (tab == null || tab == CurrentTab) return;
+        Stash();
+        CurrentTab = tab;
+        Load(tab.Id, remember: false, keep: true);
+        SaveTabs();
+    }
+
+    /// <summary>Opens a piece in a new tab (or brings its tab to the front).</summary>
+    public void OpenInNewTab(int id)
+    {
+        if (Tabs.FirstOrDefault(t => t.Id == id) is { } open) { Activate(open); return; }
+        if (_main.GetItem(id) == null) return;
+        Stash();
+        var tab = NewTab(id);
+        int at = CurrentTab != null ? Tabs.IndexOf(CurrentTab) + 1 : Tabs.Count;
+        Tabs.Insert(Math.Clamp(at, 0, Tabs.Count), tab);
+        CurrentTab = tab;
+        NoTabs = false;
+        Load(id, remember: false, keep: false);
+        SaveTabs();
+    }
+
+    /// <summary>Asks Save / Don't save / Cancel for a tab with unsaved changes (true, false, null).</summary>
+    public Func<string, bool?>? AskSaveDialog { get; set; }
+
+    [RelayCommand]
+    public void CloseTab(DocTab? tab)
+    {
+        tab ??= CurrentTab;
+        if (tab == null) return;
+        if (tab.IsDirty)
+        {
+            if (tab != CurrentTab) Activate(tab);
+            var answer = AskSaveDialog?.Invoke(Loc.F("Tabs.AskSave", tab.Text.Length > 0 ? tab.Text : tab.IdText)) ?? false;
+            if (answer == null) return;
+            if (answer == true) SaveInPlace();
+        }
+        int idx = Tabs.IndexOf(tab);
+        bool front = tab == CurrentTab;
+        if (front) { SavingView?.Invoke(tab); CurrentTab = null; }
+        Tabs.Remove(tab);
+        if (front)
+        {
+            if (Tabs.Count > 0) { CurrentTab = Tabs[Math.Clamp(idx, 0, Tabs.Count - 1)]; Load(CurrentTab.Id, remember: false, keep: true); }
+            else ClearView(nothingLeft: false);
+        }
+        NoTabs = Tabs.Count == 0;
+        SaveTabs();
+    }
+
+    /// <summary>Ctrl+Tab / Ctrl+Shift+Tab.</summary>
+    public void CycleTab(int step)
+    {
+        if (Tabs.Count < 2 || CurrentTab == null) return;
+        int i = (Tabs.IndexOf(CurrentTab) + step + Tabs.Count) % Tabs.Count;
+        Activate(Tabs[i]);
+    }
+
+    /// <summary>The open tabs are remembered (they open again with the program).</summary>
+    private void SaveTabs()
+    {
+        _main.Settings.OpenTabs = Tabs.Select(t => t.Id).ToList();
+        _main.Settings.ActiveTab = CurrentTab?.Id ?? 0;
+        _main.SaveSettings();
+    }
+
+    /// <summary>First visit of the page: the tabs of the last session, else the next piece to segment.</summary>
+    public void RestoreTabs()
+    {
+        if (Tabs.Count > 0) return;
+        foreach (var id in _main.Settings.OpenTabs.Where(i => _main.GetItem(i) != null).Distinct())
+            Tabs.Add(NewTab(id));
+        if (Tabs.Count == 0) { OpenNext(0); return; }
+        var front = Tabs.FirstOrDefault(t => t.Id == _main.Settings.ActiveTab) ?? Tabs[0];
+        CurrentTab = front;
+        NoTabs = false;
+        Load(front.Id, remember: false, keep: false);
+    }
+
+    /// <summary>Pieces removed from the library: their tabs close (nothing to save — they are gone).</summary>
+    public void Forget(IReadOnlyCollection<int> ids)
+    {
+        foreach (var t in Tabs.Where(t => ids.Contains(t.Id)).ToList()) { t.IsDirty = false; CloseTab(t); }
+    }
+
+    /// <summary>Unsaved tabs when the program closes: save them all, leave them, or stay. False = stay.</summary>
+    public bool ConfirmClose()
+    {
+        Stash();
+        var dirty = Tabs.Where(t => t.IsDirty && t.Ann != null).ToList();
+        if (dirty.Count == 0) return true;
+        var r = System.Windows.MessageBox.Show(Application.Current?.MainWindow!, Loc.F("Tabs.AskSaveAll", dirty.Count), "NEURAINK",
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (r == MessageBoxResult.Cancel) return false;
+        if (r == MessageBoxResult.Yes)
+            foreach (var t in dirty)
+                if (_main.GetItem(t.Id) is { } item && t.Ann is { Segments.Count: > 0 } ann) SaveWork(item, ann);
+        return true;
+    }
+
+    private void ClearView(bool nothingLeft)
+    {
+        Item = null; HasItem = false; NothingLeft = nothingLeft; Image = null; Original = null; _board = null; Reference = null; NotifyReference();
+        Chips.Clear(); Segments.Clear(); Drawing.Clear(); CurrentStroke.Clear();
+        SelectedOrder = 0;
+        Hint = "";
+        Redraw?.Invoke();
+    }
+
     // ------------------------------------------------------------------ open
     public void OpenNext(int after)
     {
-        var id = _main.NextToSegment(after);
+        var others = Tabs.Where(t => t != CurrentTab).Select(t => t.Id).ToHashSet();
+        var id = _main.NextToSegment(after, others);
         if (id is { } i) Open(i, remember: after != 0);
         else
         {
-            Item = null; HasItem = false; NothingLeft = true; Image = null; Original = null; _board = null; Reference = null; NotifyReference();
-            Chips.Clear(); Segments.Clear(); Drawing.Clear();
-            Redraw?.Invoke();
+            if (CurrentTab != null) { Tabs.Remove(CurrentTab); CurrentTab = null; }
+            if (Tabs.Count > 0) { CurrentTab = Tabs[0]; Load(CurrentTab.Id, remember: false, keep: true); ShowToast(Loc.T("Ann.None")); }
+            else ClearView(nothingLeft: true);
+            NoTabs = false;
+            SaveTabs();
         }
     }
 
+    /// <summary>Opens a piece in the tab in front (its tab comes to the front if it is open already).</summary>
     public void Open(int id, bool remember)
     {
+        if (_main.GetItem(id) == null) return;
+        if (Tabs.FirstOrDefault(t => t.Id == id) is { } open && open != CurrentTab) { Activate(open); return; }
+        if (CurrentTab?.Id == id && Item?.Id == id) return;   // in front already (its unsaved work stays)
+        if (CurrentTab == null)
+        {
+            CurrentTab = NewTab(id);
+            Tabs.Add(CurrentTab);
+        }
+        else if (CurrentTab.Id != id && CurrentTab.IsDirty) { OpenInNewTab(id); return; }   // unsaved work stays in its tab
+        NoTabs = false;
+        Load(id, remember, keep: false);
+        SaveTabs();
+    }
+
+    /// <summary>
+    /// Shows a piece in the tab in front. <paramref name="keep"/>: the tab's own work (undo, pen path, letter, tool) as it
+    /// was left; otherwise the piece is read from the disk.
+    /// </summary>
+    private void Load(int id, bool remember, bool keep)
+    {
         var item = _main.GetItem(id);
+        var tab = CurrentTab!;
         if (item == null) return;
-        if (remember && Item != null && Item.Id != id) _history.Push(Item.Id);
+        if (remember && Item != null && Item.Id != id) tab.History.Push(Item.Id);
+        bool fresh = !keep || tab.Ann == null;
+        if (!keep)
+        {
+            if (tab.Id != id) tab.Zoom = 0;
+            tab.Undo.Clear(); tab.Redo.Clear();
+            tab.IsDirty = false;
+        }
+        tab.Id = id;
+        _history = tab.History;
+        _undo = tab.Undo;
+        _redo = tab.Redo;
         Item = item;
         HasItem = true;
         NothingLeft = false;
-        Ann = _main.Annotations.Load(id) ?? new Annotation { Id = id, File = item.File, Text = item.Text };
-        Ann.Id = id;
-        Ann.File = item.File;
-        if (string.IsNullOrWhiteSpace(Ann.Text)) Ann.Text = item.Text;
+        SelectedOrder = 0;
+        CurrentStroke.Clear();
+        if (fresh)
+        {
+            Ann = _main.Annotations.Load(id) ?? new Annotation { Id = id, File = item.File, Text = item.Text };
+            Ann.Id = id;
+            Ann.File = item.File;
+            if (string.IsNullOrWhiteSpace(Ann.Text)) Ann.Text = item.Text;
+        }
+        else Ann = tab.Ann!;
+        tab.Ann = Ann;
+        tab.Text = Ann.Text;
+        tab.FileInfo = item.File;
         Title = $"#{item.Id}";
         FileInfo = item.File;
         Drawing.Clear();
-        _undo.Clear(); _redo.Clear();
+        if (!fresh) Drawing.AddRange(tab.Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }));
         Image = Images.Load(_main.FullPath(item.Png));
         _board = item.IsArtboard ? _main.Artboards.Get(item.Id) : null;
         Reference = _board?.Reference is { } rp ? Images.Load(rp) : null;
@@ -213,9 +437,20 @@ public sealed partial class AnnotateViewModel : ObservableObject
         _settingText = false;
         RebuildChips();
         _strokeOrder = Ann.Segments.Count == 0 ? 0 : Ann.Segments.Max(x => x.Order);
-        var first = Chips.FirstOrDefault(c => !IsDone(c.Chip.Index));
-        Active = first?.Chip.Index ?? 0;
-        Tool = first == null ? "letter" : StepFor(first.Chip.Index);
+        if (fresh)
+        {
+            var first = Chips.FirstOrDefault(c => !IsDone(c.Chip.Index));
+            Active = first?.Chip.Index ?? 0;
+            Tool = first == null ? "letter" : StepFor(first.Chip.Index);
+        }
+        else
+        {
+            Active = Math.Min(tab.Active, Math.Max(0, Chips.Count - 1));
+            _restoring = true;
+            Tool = tab.Tool;
+            _restoring = false;
+            OnPropertyChanged(nameof(IsBrushTool)); OnPropertyChanged(nameof(IsPenTool));
+        }
         Refresh();
         Opened?.Invoke();
     }
@@ -237,6 +472,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         if (_settingText || Item == null) return;
         Checkpoint();
         Ann.Text = (value ?? "").Trim();
+        if (CurrentTab != null) CurrentTab.Text = Ann.Text;
         var letters = Arabic.Letters(Ann.Text);
         // keep the regions that still match the same letter at the same place
         Ann.Segments = Ann.Segments.Where(s => s.Kind == "exclude" || (s.Chip >= 0 && s.Chip < letters.Count && letters[s.Chip].Ch == s.Letter)).ToList();
@@ -310,6 +546,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         foreach (var t in Tools) t.IsActive = t.Key == value;
         if (_restoring) { OnPropertyChanged(nameof(IsBrushTool)); OnPropertyChanged(nameof(IsPenTool)); UpdateHint(); return; }
         CurrentStroke.Clear();
+        SelectedOrder = 0;
         OnPropertyChanged(nameof(IsBrushTool));
         OnPropertyChanged(nameof(IsPenTool));
         Drawing.Clear();
@@ -505,6 +742,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
     }
     public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
     public int Fidelity { get => _main.Settings.Fidelity; set { _main.Settings.Fidelity = Math.Clamp(value, 0, 4); OnPropertyChanged(); _main.SaveSettings(); Redraw?.Invoke(); } }
+    /// <summary>StreamLine, like Procreate: the stroke follows the hand a little behind, without its shakes (0 … 100 %).</summary>
+    public double StreamLine { get => _main.Settings.StreamLine; set { _main.Settings.StreamLine = (int)Math.Clamp(Math.Round(value), 0, 100); OnPropertyChanged(); SaveBrush(); } }
     public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
     public double PictureOpacity
     {
@@ -758,8 +997,6 @@ public sealed partial class AnnotateViewModel : ObservableObject
 
     // ------------------------------------------------------------------ undo / redo (one step at a time)
     private bool _restoring;
-    private sealed record Snapshot(string Segments, List<PenNode> Drawing, int Active, string Tool, string Text);
-    private readonly Stack<Snapshot> _undo = new(), _redo = new();
     private static readonly System.Text.Json.JsonSerializerOptions SnapJson = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 
     private Snapshot Take() => new(
@@ -769,6 +1006,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     /// <summary>Remembers the state before a change (Ctrl+Z goes back to it).</summary>
     public void Checkpoint()
     {
+        if (CurrentTab != null) CurrentTab.IsDirty = true;
         _undo.Push(Take());
         if (_undo.Count > 300) { var keep = _undo.Take(200).Reverse().ToList(); _undo.Clear(); foreach (var k in keep) _undo.Push(k); }
         _redo.Clear();
@@ -784,6 +1022,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
         _restoring = true;
         Tool = s.Tool;
         _restoring = false;
+        if (CurrentTab != null) { CurrentTab.IsDirty = true; CurrentTab.Text = Ann.Text; }
+        if (SelectedStroke == null) SelectedOrder = 0;
         Refresh();
     }
 
@@ -801,22 +1041,40 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Restore(_redo.Pop());
     }
 
+    // ---- StreamLine (live smoothing while drawing): the drawn point follows the hand like a weight on a short string
+    private readonly List<double[]> _rawStroke = [];
+    private double _sx, _sy;
+
     public void BeginStroke(Point p, double pressure)
     {
         if (Item == null || !IsBrushTool) return;
         Checkpoint();
         CurrentStroke.Clear();
+        _rawStroke.Clear();
         _strokeClock.Restart();
-        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), 0]);
+        _sx = p.X; _sy = p.Y;
+        double[] first = [Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), 0];
+        CurrentStroke.Add(first);
+        _rawStroke.Add(first);
         Redraw?.Invoke();
     }
+
+    /// <summary>How much of the way to the hand the drawn point moves at each step (1 = no StreamLine).</summary>
+    private double Follow => 1 - 0.9 * Math.Clamp(StreamLine / 100.0, 0, 1);
 
     public void ExtendStroke(Point p, double pressure, double minStep)
     {
         if (CurrentStroke.Count == 0) return;
+        long ms = _strokeClock.ElapsedMilliseconds;
+        var lastRaw = _rawStroke[^1];
+        if (Math.Abs(p.X - lastRaw[0]) + Math.Abs(p.Y - lastRaw[1]) >= minStep * 0.5)
+            _rawStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), ms]);
+        double f = Follow;
+        _sx += (p.X - _sx) * f;
+        _sy += (p.Y - _sy) * f;
         var last = CurrentStroke[^1];
-        if (Math.Abs(p.X - last[0]) + Math.Abs(p.Y - last[1]) < minStep) return;
-        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), _strokeClock.ElapsedMilliseconds]);
+        if (Math.Abs(_sx - last[0]) + Math.Abs(_sy - last[1]) < minStep) return;
+        CurrentStroke.Add([Math.Round(_sx, 2), Math.Round(_sy, 2), Math.Round(pressure, 3), ms]);
         Redraw?.Invoke();
     }
 
@@ -824,19 +1082,47 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public void EndStroke(bool stay, double zoom = 1)
     {
         if (CurrentStroke.Count == 0) return;
+        // StreamLine catches up with the hand where it left the paper (like Procreate)
+        var end = _rawStroke[^1];
+        double gap = Math.Sqrt((end[0] - _sx) * (end[0] - _sx) + (end[1] - _sy) * (end[1] - _sy));
+        if (StreamLine > 0 && gap > 0.5)
+        {
+            int steps = Math.Clamp((int)(gap / 2), 1, 12);
+            for (int k = 1; k <= steps; k++)
+            {
+                double t = k / (double)steps;
+                CurrentStroke.Add([Math.Round(_sx + (end[0] - _sx) * t, 2), Math.Round(_sy + (end[1] - _sy) * t, 2), end[2], end[3]]);
+            }
+        }
         var pts = CurrentStroke.ToList();
+        var raw = StreamLine > 0 ? _rawStroke.ToList() : null;
         CurrentStroke.Clear();
-        // like the Illustrator Paintbrush: the stroke is rebuilt from a few smooth Bézier curves (tolerance in screen pixels)
-        var tol = StrokeGeometry.FitTolerance[Math.Clamp(Fidelity, 0, StrokeGeometry.FitTolerance.Length - 1)] / Math.Max(0.05, zoom);
+        _rawStroke.Clear();
+        // a part of the selected stroke drawn again (like Illustrator "Edit Selected Paths")
+        if (SelectedStroke is { } sel && RedrawPart(sel, pts, 12 / Math.Max(0.05, zoom), zoom)) { Refresh(); return; }
+        // the stroke is rebuilt from a smooth spline (see StrokeGeometry.Fit)
         List<double[]>? fit = null;
-        try { fit = pts.Count >= 2 ? StrokeGeometry.Fit(pts, tol) : null; } catch { fit = null; }
+        try { fit = pts.Count >= 2 ? StrokeGeometry.Fit(pts, zoom, Fidelity) : null; } catch { fit = null; }
         var c = ChipAt(Active);
+        Segment? made = null;
         if (Tool == "ornament")
-            Ann.Segments.Add(new Segment { Kind = "ornament", Order = ++_strokeOrder, Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts, Fit = fit });
+            made = new Segment { Kind = "ornament" };
         else if (Tool == "diacritic" && c != null)   // linguistic tashkeel belongs to its letter
-            Ann.Segments.Add(new Segment { Kind = "diacritic", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts, Fit = fit });
+            made = new Segment { Kind = "diacritic", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form) };
         else if (c != null)
-            Ann.Segments.Add(new Segment { Kind = "stroke", Order = ++_strokeOrder, Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form), Brush = Tip.Copy(), Fidelity = Fidelity, Stroke = pts, Fit = fit });
+            made = new Segment { Kind = "stroke", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form) };
+        if (made != null)
+        {
+            made.Order = ++_strokeOrder;
+            made.Brush = Tip.Copy();
+            made.Fidelity = Fidelity;
+            made.StreamLine = StreamLine > 0 ? (int)StreamLine : 0;
+            made.Stroke = pts;
+            made.Raw = raw;
+            made.Fit = fit;
+            Ann.Segments.Add(made);
+        }
+        SelectedOrder = 0;
         if (Tool == "brush" && !stay && AutoNextLetter && Chips.Count > 0)
         {
             for (int k = 1; k <= Chips.Count; k++)
@@ -848,12 +1134,175 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Refresh();
     }
 
+    // ------------------------------------------------------------------ editing a stroke after drawing (like Illustrator)
+    /// <summary>The stroke selected for editing (Ctrl + click): its anchors and handles show and can be dragged.</summary>
+    [ObservableProperty] private int _selectedOrder;
+    partial void OnSelectedOrderChanged(int value) => Redraw?.Invoke();
+
+    private static bool IsStrokeKind(Segment s) => s.Kind is "stroke" or "diacritic" or "ornament" && s.Brush != null && s.Stroke is { Count: > 0 };
+
+    public Segment? SelectedStroke => SelectedOrder == 0 ? null : Ann.Segments.FirstOrDefault(s => s.Order == SelectedOrder && IsStrokeKind(s));
+
+    /// <summary>The stroke under a point (the top one): inside its ink, or within <paramref name="tol"/> of its path.</summary>
+    public Segment? HitStroke(Point p, double tol)
+    {
+        Segment? best = null;
+        double bestD = tol;
+        foreach (var s in Ann.Segments.Where(IsStrokeKind).OrderByDescending(x => x.Order))
+        {
+            try { if (StrokeGeometry.ForSegment(s).FillContains(p)) return s; } catch { }
+            foreach (var q in PathOf(s))
+            {
+                double d = Math.Sqrt((q[0] - p.X) * (q[0] - p.X) + (q[1] - p.Y) * (q[1] - p.Y));
+                if (d < bestD) { bestD = d; best = s; }
+            }
+        }
+        return best;
+    }
+
+    public void SelectStroke(Segment? s)
+    {
+        SelectedOrder = s?.Order ?? 0;
+        if (s != null && s.Chip >= 0 && s.Chip < Chips.Count && s.Kind != "ornament") { Active = s.Chip; Refresh(); }
+    }
+
+    /// <summary>The path a stroke follows: its fitted curves sampled, else its points.</summary>
+    private static List<double[]> PathOf(Segment s) =>
+        s.Fit is { Count: > 0 } f ? StrokeGeometry.SampleFit(f) : s.Stroke!.Select(p => new[] { p[0], p[1], p.Length > 2 ? p[2] : 0 }).ToList();
+
+    /// <summary>Anchors of the selected stroke: the ends of its curves.</summary>
+    public static Point AnchorOf(List<double[]> fit, int k) => k < fit.Count ? new Point(fit[k][0], fit[k][1]) : new Point(fit[^1][6], fit[^1][7]);
+
+    /// <summary>What a click lands on in the selected stroke: anchor k, its in handle or its out handle.</summary>
+    public (int K, string Part)? HitFit(Point p, double r)
+    {
+        if (SelectedStroke?.Fit is not { Count: > 0 } fit) return null;
+        for (int k = 0; k <= fit.Count; k++)
+        {
+            if (k < fit.Count && Near(fit[k][2], fit[k][3])) return (k, "out");
+            if (k > 0 && Near(fit[k - 1][4], fit[k - 1][5])) return (k, "in");
+        }
+        for (int k = 0; k <= fit.Count; k++)
+        {
+            var a = AnchorOf(fit, k);
+            if (Near(a.X, a.Y)) return (k, "anchor");
+        }
+        return null;
+        bool Near(double x, double y) => (x - p.X) * (x - p.X) + (y - p.Y) * (y - p.Y) <= r * r;
+    }
+
+    /// <summary>Moves anchor k of the selected stroke with its handles.</summary>
+    public void MoveFitAnchor(int k, Point to)
+    {
+        if (SelectedStroke?.Fit is not { Count: > 0 } fit) return;
+        var a = AnchorOf(fit, k);
+        double dx = to.X - a.X, dy = to.Y - a.Y;
+        if (k < fit.Count) { fit[k][0] += dx; fit[k][1] += dy; fit[k][2] += dx; fit[k][3] += dy; }
+        if (k > 0) { fit[k - 1][6] += dx; fit[k - 1][7] += dy; fit[k - 1][4] += dx; fit[k - 1][5] += dy; }
+        Redraw?.Invoke();
+    }
+
+    /// <summary>Moves a handle; the opposite one turns with it (a smooth anchor stays smooth) unless Alt breaks them apart.</summary>
+    public void MoveFitHandle(int k, bool outHandle, Point to, bool alt)
+    {
+        if (SelectedStroke?.Fit is not { Count: > 0 } fit) return;
+        var a = AnchorOf(fit, k);
+        if (outHandle && k < fit.Count) { fit[k][2] = to.X; fit[k][3] = to.Y; }
+        if (!outHandle && k > 0) { fit[k - 1][4] = to.X; fit[k - 1][5] = to.Y; }
+        if (!alt)
+        {
+            var dir = a - to;
+            if (dir.Length > 1e-6)
+            {
+                dir.Normalize();
+                if (outHandle && k > 0)
+                {
+                    double len = new Vector(fit[k - 1][4] - a.X, fit[k - 1][5] - a.Y).Length;
+                    fit[k - 1][4] = a.X + dir.X * len; fit[k - 1][5] = a.Y + dir.Y * len;
+                }
+                else if (!outHandle && k < fit.Count)
+                {
+                    double len = new Vector(fit[k][2] - a.X, fit[k][3] - a.Y).Length;
+                    fit[k][2] = a.X + dir.X * len; fit[k][3] = a.Y + dir.Y * len;
+                }
+            }
+        }
+        Redraw?.Invoke();
+    }
+
+    /// <summary>After dragging anchors or handles: the stroke's points follow its new curves (the hand stays in Raw).</summary>
+    public void EndFitEdit()
+    {
+        if (SelectedStroke is not { Fit: { Count: > 0 } fit } s) return;
+        s.Raw ??= s.Stroke;
+        s.Stroke = StrokeGeometry.SampleFit(fit).Select(q => new[] { Math.Round(q[0], 2), Math.Round(q[1], 2), Math.Round(q[2], 3), 0 }).ToList();
+        s.Edited = true;
+        Refresh();
+    }
+
+    /// <summary>
+    /// A new stroke that starts on the selected one redraws that part of it: between where it starts and where it ends on
+    /// the stroke, or from where it starts to the end it heads for. Returns false when it does not start on the stroke.
+    /// </summary>
+    private bool RedrawPart(Segment sel, List<double[]> pts, double tol, double zoom)
+    {
+        if (pts.Count < 2) return false;
+        var path = PathOf(sel).Select(q => new[] { q[0], q[1], q.Length > 2 ? q[2] : 0, 0 }).ToList();
+        if (path.Count < 2) return false;
+        (int I, double D) Nearest(double[] p)
+        {
+            int bi = 0; double bd = double.MaxValue;
+            for (int i = 0; i < path.Count; i++)
+            {
+                double d = (path[i][0] - p[0]) * (path[i][0] - p[0]) + (path[i][1] - p[1]) * (path[i][1] - p[1]);
+                if (d < bd) { bd = d; bi = i; }
+            }
+            return (bi, Math.Sqrt(bd));
+        }
+        var (ia, da) = Nearest(pts[0]);
+        if (da > tol) return false;
+        var (ib, db) = Nearest(pts[^1]);
+        List<double[]> joined;
+        if (db <= tol && Math.Abs(ib - ia) > 2)
+        {
+            if (ia <= ib) joined = [.. path.Take(ia), .. pts, .. path.Skip(ib + 1)];
+            else { var rev = Enumerable.Reverse(pts).ToList(); joined = [.. path.Take(ib), .. rev, .. path.Skip(ia + 1)]; }
+        }
+        else
+        {
+            // heading along the stroke: its tail is replaced; heading back: its head
+            int j = Math.Min(ia + 1, path.Count - 1), i0 = Math.Max(0, j - 1);
+            double tx = path[j][0] - path[i0][0], ty = path[j][1] - path[i0][1];
+            var far = pts[Math.Min(pts.Count - 1, 8)];
+            bool forward = (far[0] - pts[0][0]) * tx + (far[1] - pts[0][1]) * ty >= 0;
+            if (forward) joined = [.. path.Take(ia), .. pts];
+            else { var rev = Enumerable.Reverse(pts).ToList(); joined = [.. rev, .. path.Skip(ia + 1)]; }
+        }
+        if (joined.Count < 2) return false;
+        sel.Raw ??= sel.Stroke;
+        sel.Stroke = joined;
+        try { sel.Fit = StrokeGeometry.Fit(joined, zoom, Fidelity); } catch { sel.Fit = null; }
+        sel.Edited = true;
+        return true;
+    }
+
+    /// <summary>Delete: the selected stroke goes.</summary>
+    public bool DeleteSelectedStroke()
+    {
+        if (SelectedStroke is not { } s) return false;
+        Checkpoint();
+        Ann.Segments.Remove(s);
+        SelectedOrder = 0;
+        Refresh();
+        return true;
+    }
+
     public void BackspacePoint()
     {
         if (Drawing.Count > 0) { Checkpoint(); Drawing.RemoveAt(Drawing.Count - 1); Redraw?.Invoke(); }
     }
 
-    public void CancelDrawing() { Drawing.Clear(); Redraw?.Invoke(); }
+    public void CancelDrawing() { Drawing.Clear(); SelectedOrder = 0; Redraw?.Invoke(); }
 
     public void Undo() => UndoStep();
 
@@ -913,13 +1362,31 @@ public sealed partial class AnnotateViewModel : ObservableObject
     {
         if (Item == null) return;
         if (Ann.Segments.Count == 0) { ShowToast(Loc.T("Ann.NeedBody")); return; }
-        bool all = Chips.Count > 0 && Chips.All(c => Body(c.Chip.Index) != null || HasStrokes(c.Chip.Index));
-        Ann.State = all ? "done" : "partial";
-        Persist();
-        int n = LetterExporter.Export(Item, Ann, _main.FullPath(Item.Png), _main.Letters, _main.Settings.Style);
+        var (all, n) = SaveWork(Item, Ann);
         ShowToast(all ? Loc.F("Ann.Saved", n) : Loc.T("Ann.Partial"));
-        _main.RefreshCounts();
+        if (CurrentTab != null) CurrentTab.IsDirty = false;
         OpenNext(Item.Id);
+    }
+
+    /// <summary>Saves the tab in front without moving on (closing a tab: "Save").</summary>
+    public void SaveInPlace()
+    {
+        if (Item == null || Ann.Segments.Count == 0) { if (CurrentTab != null) CurrentTab.IsDirty = false; return; }
+        SaveWork(Item, Ann);
+        if (CurrentTab != null) CurrentTab.IsDirty = false;
+    }
+
+    /// <summary>Writes a segmentation and cuts its letters into the letter library: (every letter done, letters cut).</summary>
+    private (bool All, int Letters) SaveWork(LibraryItem item, Annotation ann)
+    {
+        var letters = Arabic.Letters(ann.Text);
+        bool all = letters.Count > 0 && letters.All(c => ann.Segments.Any(x => x.Chip == c.Index && x.Kind is "letter" or "stroke"));
+        ann.State = all ? "done" : "partial";
+        try { _main.Annotations.Save(ann); }
+        catch (Exception ex) { Dialogs.Error(ex.Message); }
+        int n = LetterExporter.Export(item, ann, _main.FullPath(item.Png), _main.Letters, _main.Settings.Style);
+        _main.RefreshCounts();
+        return (all, n);
     }
 
     [RelayCommand]
@@ -928,6 +1395,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         if (Item == null) return;
         Ann.State = "rejected";
         Persist();
+        if (CurrentTab != null) CurrentTab.IsDirty = false;
         _main.Letters.RemoveSource(Item.Id);
         ShowToast(Loc.T("Ann.Rejected"));
         _main.RefreshCounts();
@@ -941,16 +1409,30 @@ public sealed partial class AnnotateViewModel : ObservableObject
     private void NewArtboard()
     {
         if (NewArtboardDialog?.Invoke() is not { } r) return;
-        if (_main.NewArtboard(r.Text, r.W, r.H) is { } item) Open(item.Id, remember: true);
+        if (_main.NewArtboard(r.Text, r.W, r.H) is { } item) OpenInNewTab(item.Id);
     }
 
-    [RelayCommand] private void Skip() { if (Item != null) OpenNext(Item.Id); }
+    /// <summary>Every tab closed: the next piece to segment opens.</summary>
+    [RelayCommand] private void OpenNextPiece() { NoTabs = false; OpenNext(0); }
+
+    [RelayCommand] private void Skip() { if (Item != null && LeaveCurrent()) OpenNext(Item.Id); }
 
     [RelayCommand]
     private void Previous()
     {
-        if (_history.Count == 0) return;
+        if (_history.Count == 0 || !LeaveCurrent()) return;
         Open(_history.Pop(), remember: false);
+    }
+
+    /// <summary>Before the tab in front shows another piece: its unsaved work is saved, dropped, or the move is cancelled.</summary>
+    private bool LeaveCurrent()
+    {
+        if (CurrentTab is not { IsDirty: true } t) return true;
+        var answer = AskSaveDialog?.Invoke(Loc.F("Tabs.AskSave", t.Text.Length > 0 ? t.Text : t.IdText)) ?? false;
+        if (answer == null) return false;
+        if (answer == true) SaveInPlace();
+        t.IsDirty = false;
+        return true;
     }
 
     private void Persist()

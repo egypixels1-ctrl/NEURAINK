@@ -9,7 +9,13 @@ namespace Neuraink.App.Services;
 /// <summary>Localized strings from the active Strings.xx.xaml dictionary.</summary>
 public static class Loc
 {
-    public static string T(string key) => Application.Current?.TryFindResource(key) as string ?? key;
+    public static string T(string key)
+    {
+        var app = Application.Current;
+        if (app == null) return key;
+        if (!app.Dispatcher.CheckAccess()) return app.Dispatcher.Invoke(() => T(key));   // from a background task
+        return app.TryFindResource(key) as string ?? key;
+    }
     public static string F(string key, params object[] args) => string.Format(T(key), args);
 }
 

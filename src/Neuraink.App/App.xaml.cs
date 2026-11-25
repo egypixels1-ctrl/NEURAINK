@@ -72,6 +72,46 @@ public partial class App : Application
                     DemoBrush(vm.Annotate);
                 }, DispatcherPriority.ContextIdle);
                 break;
+            case "tabs":
+                // three pieces in tabs (Illustrator style), the one in front with unsaved strokes
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    foreach (var it in vm.Library.Items.Skip(1).Take(2)) vm.Annotate.OpenInNewTab(it.Id);
+                    DemoBrush(vm.Annotate);
+                }, DispatcherPriority.ContextIdle);
+                break;
+            case "annotate-edit":
+                // a stroke selected for editing (Ctrl + click): its anchors and handles
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    DemoBrush(vm.Annotate);
+                    vm.Annotate.SelectStroke(vm.Annotate.Ann.Segments.FirstOrDefault(x => x.Kind == "stroke"));
+                }, DispatcherPriority.ContextIdle);
+                break;
+            case "compact":
+                // the menu folded to its icons and the side panel folded: the picture takes the room
+                vm.NavCollapsed = true;
+                vm.Settings.SidePanelCollapsed = true;
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() => DemoBrush(vm.Annotate), DispatcherPriority.ContextIdle);
+                break;
+            case "library-add":
+                // a picture added to the library (cleaned, traced to SVG, thumbnail, report row), then two pieces ticked
+                Dispatcher.BeginInvoke(async () =>
+                {
+                    var src = vm.Library.Items.Select(i => vm.FullPath(i.Png)).FirstOrDefault(File.Exists);
+                    if (src == null) return;
+                    var dir = Path.Combine(Path.GetTempPath(), "neuraink-add");
+                    Directory.CreateDirectory(dir);
+                    var pic = Path.Combine(dir, "سامي (2).png");
+                    File.Copy(src, pic, true);
+                    vm.Go(vm.LibraryPage);
+                    await vm.LibraryPage.AddFiles([pic]);
+                    foreach (var t in vm.LibraryPage.Tiles.Skip(1).Take(2)) t.IsSelected = true;
+                }, DispatcherPriority.ContextIdle);
+                break;
             case "brush-options":
                 vm.Go(vm.Annotate);
                 Dispatcher.BeginInvoke(() =>

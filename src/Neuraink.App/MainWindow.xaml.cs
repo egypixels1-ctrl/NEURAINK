@@ -17,5 +17,7 @@ public partial class MainWindow : Window
             MinHeight = Math.Min(MinHeight, area.Height);
             WindowState = WindowState.Maximized;
         }
+        // unsaved tabs of Letter Segmentation: save them, leave them, or stay
+        Closing += (_, e) => { if (DataContext is ViewModels.MainViewModel vm && !vm.ConfirmClose()) e.Cancel = true; };
     }
 }

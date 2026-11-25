@@ -18,24 +18,69 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="248" />
+            <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- sidebar -->
+        <!-- sidebar: folds to its icons (the arrow next to Dashboard); the names show as tooltips -->
         <Border Grid.Column="0" Background="{DynamicResource LayerFillColorAltBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
-            <DockPanel Margin="12,18,12,12" LastChildFill="True">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Width" Value="248" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding NavCollapsed}" Value="True">
+                            <Setter Property="Width" Value="68" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel Margin="10,18,10,12" LastChildFill="True">
                 <!-- NEURAINK brand: ink drop + name + tagline -->
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,4,22" FlowDirection="LeftToRight">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,4,22" FlowDirection="LeftToRight"
+                            Visibility="{Binding NavCollapsed, Converter={StaticResource InverseBoolToVis}}">
                     <Image Source="pack://application:,,,/NEURAINK;component/Assets/neuraink.png" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality" />
                     <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="NEURAINK" FontWeight="Bold" FontSize="17" />
                         <TextBlock Text="{DynamicResource App.Tagline}" FontSize="10.5" Opacity="0.6" Margin="0,1,0,0" />
                     </StackPanel>
                 </StackPanel>
+                <!-- folded: the drop, then the arrow that opens the menu again -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14" Visibility="{Binding NavCollapsed, Converter={StaticResource BoolToVis}}">
+                    <Image Source="pack://application:,,,/NEURAINK;component/Assets/neuraink.png" Width="34" Height="34" RenderOptions.BitmapScalingMode="HighQuality"
+                           HorizontalAlignment="Center" ToolTip="NEURAINK" />
+                    <Button Command="{Binding ToggleNavCommand}" Padding="8,5" Margin="0,14,0,0" HorizontalAlignment="Center" Focusable="False"
+                            ToolTip="{DynamicResource Nav.Expand}">
+                        <Grid>
+                            <TextBlock Text="&#xE76C;" FontSize="11">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="&#xE76B;" FontSize="11">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+                </StackPanel>
 
-                <TextBlock DockPanel.Dock="Bottom" Text="{Binding VersionText}" Style="{StaticResource Muted}" FontSize="11" Margin="8,8,0,0" FlowDirection="LeftToRight" HorizontalAlignment="Left" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding VersionText}" Style="{StaticResource Muted}" FontSize="11" Margin="8,8,0,0" FlowDirection="LeftToRight" HorizontalAlignment="Left"
+                           Visibility="{Binding NavCollapsed, Converter={StaticResource InverseBoolToVis}}" />
 
                 <ListBox ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}"
                          Background="Transparent" BorderThickness="0"
@@ -43,20 +88,52 @@
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                             <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+                            <Setter Property="ToolTip" Value="{x:Null}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.NavCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="ToolTip" Value="{Binding Title}" />
+                                </DataTrigger>
+                            </Style.Triggers>
                         </Style>
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <DockPanel Margin="4,8,12,8">
-                                <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Padding="7,0"
-                                        Visibility="{Binding IsSoon, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="{DynamicResource Common.Soon}" FontSize="10.5" />
-                                </Border>
-                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"
-                                           FlowDirection="LeftToRight" />
-                                <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" Margin="0,0,12,0" />
-                                <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            </DockPanel>
+                            <Grid>
+                                <!-- open: icon, name, count / Soon; the first row has the arrow that folds the menu -->
+                                <DockPanel x:Name="Full" Margin="4,8,4,8">
+                                    <Button x:Name="Fold" DockPanel.Dock="Right" Padding="5,2" Margin="6,0,0,0" VerticalAlignment="Center" Focusable="False" Visibility="Collapsed"
+                                            Command="{Binding DataContext.ToggleNavCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            Background="Transparent" BorderThickness="0" ToolTip="{DynamicResource Nav.Collapse}">
+                                        <Grid>
+                                            <TextBlock x:Name="FoldLtr" Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="10" Opacity="0.75" />
+                                            <TextBlock x:Name="FoldRtl" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="10" Opacity="0.75" Visibility="Collapsed" />
+                                        </Grid>
+                                    </Button>
+                                    <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Padding="7,0"
+                                            Visibility="{Binding IsSoon, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="{DynamicResource Common.Soon}" FontSize="10.5" />
+                                    </Border>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"
+                                               FlowDirection="LeftToRight" />
+                                    <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" Margin="0,0,12,0" />
+                                    <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                                <!-- folded: the icon only -->
+                                <TextBlock x:Name="IconOnly" Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="16" HorizontalAlignment="Center" Margin="0,9" Visibility="Collapsed" />
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsFirst}" Value="True">
+                                    <Setter TargetName="Fold" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
+                                    <Setter TargetName="FoldLtr" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="FoldRtl" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DataContext.NavCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter TargetName="Full" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="IconOnly" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -64,6 +141,6 @@
         </Border>
 
         <!-- page -->
-        <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="28,22,28,20" Focusable="False" />
+        <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="24,22,28,20" Focusable="False" />
     </Grid>
 </Window>

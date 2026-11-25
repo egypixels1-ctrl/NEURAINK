@@ -160,57 +160,230 @@ public static class StrokeGeometry
 
 
     // ======================================================================================================
-    // Curve fitting, like the Illustrator Paintbrush: when the stroke ends, the hand's path is replaced by a few
-    // smooth cubic Bézier curves that stay within a tolerance of it (Schneider, "An Algorithm for Automatically
-    // Fitting Digitized Curves", Graphics Gems 1990). Sharp turns (corners of the letters) are kept as corners.
+    // Stroke fitting, like the Illustrator Paintbrush (and better): when the stroke ends, the hand's path is replaced by
+    // a smoothing cubic B-spline fitted by least squares — few control points, and continuous curvature everywhere
+    // (no kinks where two curves meet) — then written as Bézier curves. Real cusps (where the pen turns back) stay sharp.
+    // Fidelity sets the distance between knots (in screen pixels) and how far the curve may stray from the hand.
+    // Tuned on real strokes of the user (piece 2133, «ح»).
     // ======================================================================================================
 
-    /// <summary>Tolerance of each Fidelity step, in screen pixels (Accurate … Smooth).</summary>
-    public static readonly double[] FitTolerance = [1, 2, 4, 7, 11];
+    /// <summary>Screen pixels between knots, Accurate … Smooth.</summary>
+    private static readonly double[] KnotSpacing = [30, 45, 60, 75, 90];
+    /// <summary>Largest distance from the hand's path allowed, screen pixels, Accurate … Smooth.</summary>
+    private static readonly double[] MaxDeviation = [3, 5, 8, 10, 12];
 
     /// <summary>The stroke as Bézier curves: per curve x0, y0, x1, y1, x2, y2, x3, y3, pressure start, pressure end.</summary>
-    public static List<double[]> Fit(IReadOnlyList<double[]> raw, double tolerance)
+    public static List<double[]> Fit(IReadOnlyList<double[]> raw, double zoom, int fidelity)
     {
         var res = new List<double[]>();
-        var pts = Resample(raw, 1.5);
-        if (pts.Count < 2) return res;
-        var P = pts.Select(p => new Point(p[0], p[1])).ToArray();
-        var pr = pts.Select(p => p[2]).ToArray();
-        double err2 = tolerance * tolerance;
+        var q = Resample(raw, 1.0);
+        if (q.Count < 3) return res;
+        zoom = Math.Max(0.05, zoom);
+        int f = Math.Clamp(fidelity, 0, KnotSpacing.Length - 1);
+        double spacing = KnotSpacing[f] / zoom, tol = MaxDeviation[f] / zoom;
+        int w = Math.Max(3, (int)Math.Round(6 / zoom));
 
-        // corners: where the direction turns sharply
         var cuts = new List<int> { 0 };
-        const int k = 4;
-        int lastCut = 0;
-        for (int i = k; i < P.Length - k; i++)
-        {
-            var a = P[i] - P[i - k]; var b = P[i + k] - P[i];
-            if (a.Length < 1e-6 || b.Length < 1e-6) continue;
-            double ang = Math.Abs(Vector.AngleBetween(a, b));
-            if (ang < 75 || i - lastCut < 2 * k) continue;
-            // the sharpest point around here
-            int best = i; double bestAng = ang;
-            for (int j = i + 1; j < Math.Min(P.Length - k, i + k); j++)
-            {
-                var a2 = P[j] - P[j - k]; var b2 = P[j + k] - P[j];
-                double g = Math.Abs(Vector.AngleBetween(a2, b2));
-                if (g > bestAng) { bestAng = g; best = j; }
-            }
-            cuts.Add(best);
-            lastCut = best;
-            i = best + k;
-        }
-        cuts.Add(P.Length - 1);
-
+        cuts.AddRange(Cusps(q, w));
+        cuts.Add(q.Count - 1);
         for (int c = 0; c + 1 < cuts.Count; c++)
         {
-            int first = cuts[c], last = cuts[c + 1];
-            if (last <= first) continue;
-            var t1 = LeftTangent(P, first, last);
-            var t2 = RightTangent(P, first, last);
-            FitCubic(P, pr, first, last, t1, t2, err2, res, 0);
+            int a = cuts[c], b = cuts[c + 1];
+            if (b - a < 2) continue;
+            res.AddRange(FitPiece(q.GetRange(a, b - a + 1), spacing, tol));
         }
         return res;
+    }
+
+    /// <summary>Where the pen turns back sharply (more than 110°): the stroke is fitted in separate pieces there.</summary>
+    private static List<int> Cusps(List<double[]> q, int w)
+    {
+        var idx = new List<int>();
+        double Ang(int j)
+        {
+            double ax = q[j][0] - q[j - w][0], ay = q[j][1] - q[j - w][1], bx = q[j + w][0] - q[j][0], by = q[j + w][1] - q[j][1];
+            double na = Math.Sqrt(ax * ax + ay * ay), nb = Math.Sqrt(bx * bx + by * by);
+            if (na < 1e-9 || nb < 1e-9) return 0;
+            return Math.Acos(Math.Clamp((ax * bx + ay * by) / (na * nb), -1, 1)) * 180 / Math.PI;
+        }
+        int last = int.MinValue / 2;
+        for (int i = w; i < q.Count - w; i++)
+        {
+            double g = Ang(i);
+            if (g <= 110 || i - last <= 3 * w) continue;
+            int best = i; double bestG = g;
+            for (int j = i + 1; j < Math.Min(q.Count - w, i + w); j++) { var h = Ang(j); if (h > bestG) { bestG = h; best = j; } }
+            idx.Add(best);
+            last = best;
+            i = best + w;
+        }
+        return idx;
+    }
+
+    /// <summary>One piece: a clamped cubic B-spline (least squares + a light bending penalty), knots made closer until it stays within the tolerance.</summary>
+    private static IEnumerable<double[]> FitPiece(List<double[]> q, double spacing, double tol)
+    {
+        int m = q.Count;
+        double len = 0;
+        for (int i = 1; i < m; i++) len += Math.Sqrt(Sq(q[i][0] - q[i - 1][0]) + Sq(q[i][1] - q[i - 1][1]));
+        var t = new double[m];
+        for (int i = 0; i < m; i++) t[i] = m == 1 ? 0 : i / (double)(m - 1);
+
+        double[] knots = [];
+        double[][] ctrl = [];
+        for (int it = 0; it < 6; it++)
+        {
+            int nseg = Math.Max(1, (int)Math.Round(len / spacing));
+            knots = Knots(nseg);
+            ctrl = Solve(q, t, knots, 0.5);
+            double err = 0;
+            for (int i = 0; i < m; i++)
+            {
+                var p = Eval(knots, ctrl, t[i]);
+                err = Math.Max(err, Math.Sqrt(Sq(p[0] - q[i][0]) + Sq(p[1] - q[i][1])));
+            }
+            if (err <= tol || nseg > m / 3) break;
+            spacing *= 0.75;
+        }
+        foreach (var b in ToBeziers(knots, ctrl))
+            yield return [b[0][0], b[0][1], b[1][0], b[1][1], b[2][0], b[2][1], b[3][0], b[3][1], b[0][2], b[3][2]];
+    }
+
+    private static double Sq(double v) => v * v;
+
+    private static double[] Knots(int nseg)
+    {
+        var k = new List<double> { 0, 0, 0, 0 };
+        for (int i = 1; i < nseg; i++) k.Add(i / (double)nseg);
+        k.AddRange([1, 1, 1, 1]);
+        return [.. k];
+    }
+
+    private static int Span(double[] k, int n, double u)
+    {
+        if (u >= k[n]) return n - 1;
+        int lo = 3, hi = n;
+        while (hi - lo > 1) { int mid = (lo + hi) / 2; if (u < k[mid]) hi = mid; else lo = mid; }
+        return lo;
+    }
+
+    /// <summary>The four non-zero cubic basis functions at u (span s), "The NURBS Book" A2.2.</summary>
+    private static double[] Basis(double[] k, int s, double u)
+    {
+        var N = new double[4]; var left = new double[4]; var right = new double[4];
+        N[0] = 1;
+        for (int j = 1; j <= 3; j++)
+        {
+            left[j] = u - k[s + 1 - j]; right[j] = k[s + j] - u;
+            double saved = 0;
+            for (int r = 0; r < j; r++)
+            {
+                double den = right[r + 1] + left[j - r];
+                double tmp = den == 0 ? 0 : N[r] / den;
+                N[r] = saved + right[r + 1] * tmp;
+                saved = left[j - r] * tmp;
+            }
+            N[j] = saved;
+        }
+        return N;
+    }
+
+    private static double[] Eval(double[] k, double[][] c, double u)
+    {
+        int n = c.Length, s = Span(k, n, u);
+        var N = Basis(k, s, u);
+        var p = new double[3];
+        for (int i = 0; i < 4; i++) for (int d = 0; d < 3; d++) p[d] += N[i] * c[s - 3 + i][d];
+        return p;
+    }
+
+    /// <summary>Least squares with the ends held, plus a small penalty on the control polygon's bending.</summary>
+    private static double[][] Solve(List<double[]> q, double[] t, double[] k, double lambda)
+    {
+        int n = k.Length - 4, m = q.Count;
+        var A = new double[n, n];
+        var rhs = new double[n, 3];
+        for (int i = 0; i < m; i++)
+        {
+            double w = i == 0 || i == m - 1 ? 1e4 : 1;
+            int s = Span(k, n, t[i]);
+            var N = Basis(k, s, t[i]);
+            for (int a = 0; a < 4; a++)
+            {
+                int ra = s - 3 + a;
+                for (int b = 0; b < 4; b++) A[ra, s - 3 + b] += w * N[a] * N[b];
+                for (int d = 0; d < 3; d++) rhs[ra, d] += w * N[a] * q[i][d];
+            }
+        }
+        for (int i = 0; i + 2 < n; i++)   // second differences of the control points
+        {
+            double[] dv = [1, -2, 1];
+            for (int a = 0; a < 3; a++) for (int b = 0; b < 3; b++) A[i + a, i + b] += lambda * dv[a] * dv[b];
+        }
+        // Gaussian elimination with partial pivoting
+        var x = new double[n][];
+        for (int col = 0; col < n; col++)
+        {
+            int piv = col;
+            for (int r = col + 1; r < n; r++) if (Math.Abs(A[r, col]) > Math.Abs(A[piv, col])) piv = r;
+            if (piv != col)
+            {
+                for (int cc = 0; cc < n; cc++) (A[col, cc], A[piv, cc]) = (A[piv, cc], A[col, cc]);
+                for (int d = 0; d < 3; d++) (rhs[col, d], rhs[piv, d]) = (rhs[piv, d], rhs[col, d]);
+            }
+            double diag = A[col, col];
+            if (Math.Abs(diag) < 1e-12) diag = 1e-12;
+            for (int r = col + 1; r < n; r++)
+            {
+                double fct = A[r, col] / diag;
+                if (fct == 0) continue;
+                for (int cc = col; cc < n; cc++) A[r, cc] -= fct * A[col, cc];
+                for (int d = 0; d < 3; d++) rhs[r, d] -= fct * rhs[col, d];
+            }
+        }
+        for (int r = n - 1; r >= 0; r--)
+        {
+            x[r] = new double[3];
+            for (int d = 0; d < 3; d++)
+            {
+                double sum = rhs[r, d];
+                for (int cc = r + 1; cc < n; cc++) sum -= A[r, cc] * x[cc][d];
+                x[r][d] = sum / (Math.Abs(A[r, r]) < 1e-12 ? 1e-12 : A[r, r]);
+            }
+        }
+        return x;
+    }
+
+    /// <summary>The B-spline as Bézier curves (knot insertion until every interior knot has multiplicity 3).</summary>
+    private static List<double[][]> ToBeziers(double[] knots, double[][] ctrl)
+    {
+        var k = knots.ToList();
+        var P = ctrl.Select(c => (double[])c.Clone()).ToList();
+        foreach (var u in knots.Skip(4).Take(knots.Length - 8).Distinct().ToList())
+        {
+            int mult = k.Count(x => x == u);
+            for (int r = mult; r < 3; r++)
+            {
+                int s = -1;
+                for (int i = 0; i < k.Count - 1; i++) if (k[i] <= u && u < k[i + 1]) s = i;
+                var Q = new List<double[]>();
+                for (int i = 0; i <= P.Count; i++)
+                {
+                    if (i <= s - 3) Q.Add(P[i]);
+                    else if (i > s) Q.Add(P[i - 1]);
+                    else
+                    {
+                        double a = (u - k[i]) / (k[i + 3] - k[i]);
+                        Q.Add([(1 - a) * P[i - 1][0] + a * P[i][0], (1 - a) * P[i - 1][1] + a * P[i][1], (1 - a) * P[i - 1][2] + a * P[i][2]]);
+                    }
+                }
+                k.Insert(s + 1, u);
+                P = Q;
+            }
+        }
+        var outp = new List<double[][]>();
+        for (int i = 0; i + 3 < P.Count; i += 3) outp.Add([P[i], P[i + 1], P[i + 2], P[i + 3]]);
+        return outp;
     }
 
     private static List<double[]> Resample(IReadOnlyList<double[]> raw, double step)
@@ -239,124 +412,6 @@ public static class StrokeGeometry
         return outp;
     }
 
-    private static Vector LeftTangent(Point[] d, int first, int last)
-    {
-        var v = d[Math.Min(first + 3, last)] - d[first];
-        if (v.Length < 1e-9) v = d[last] - d[first];
-        if (v.Length > 1e-9) v.Normalize();
-        return v;
-    }
-
-    private static Vector RightTangent(Point[] d, int first, int last)
-    {
-        var v = d[Math.Max(last - 3, first)] - d[last];
-        if (v.Length < 1e-9) v = d[first] - d[last];
-        if (v.Length > 1e-9) v.Normalize();
-        return v;
-    }
-
-    private static void FitCubic(Point[] d, double[] pr, int first, int last, Vector t1, Vector t2, double err2, List<double[]> outp, int depth)
-    {
-        int n = last - first + 1;
-        if (n == 2 || depth > 40)
-        {
-            double dist = (d[last] - d[first]).Length / 3;
-            Add(outp, d[first], d[first] + t1 * dist, d[last] + t2 * dist, d[last], pr[first], pr[last]);
-            return;
-        }
-        var u = ChordLength(d, first, last);
-        var bez = Generate(d, first, last, u, t1, t2);
-        double maxErr = MaxError(d, first, last, bez, u, out int split);
-        if (maxErr < err2) { Add(outp, bez[0], bez[1], bez[2], bez[3], pr[first], pr[last]); return; }
-        if (maxErr < err2 * 4)
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                u = Reparameterize(d, first, last, u, bez);
-                bez = Generate(d, first, last, u, t1, t2);
-                maxErr = MaxError(d, first, last, bez, u, out split);
-                if (maxErr < err2) { Add(outp, bez[0], bez[1], bez[2], bez[3], pr[first], pr[last]); return; }
-            }
-        }
-        split = Math.Clamp(split, first + 1, last - 1);
-        var center = d[split - 1] - d[split + 1];
-        if (center.Length < 1e-9) center = d[first] - d[last];
-        center.Normalize();
-        FitCubic(d, pr, first, split, t1, center, err2, outp, depth + 1);
-        FitCubic(d, pr, split, last, -center, t2, err2, outp, depth + 1);
-    }
-
-    private static void Add(List<double[]> outp, Point a, Point b, Point c, Point e, double p0, double p1) =>
-        outp.Add([a.X, a.Y, b.X, b.Y, c.X, c.Y, e.X, e.Y, p0, p1]);
-
-    private static double[] ChordLength(Point[] d, int first, int last)
-    {
-        var u = new double[last - first + 1];
-        for (int i = first + 1; i <= last; i++) u[i - first] = u[i - first - 1] + (d[i] - d[i - 1]).Length;
-        double total = u[^1];
-        if (total > 0) for (int i = 1; i < u.Length; i++) u[i] /= total;
-        return u;
-    }
-
-    private static Point[] Generate(Point[] d, int first, int last, double[] u, Vector t1, Vector t2)
-    {
-        double c00 = 0, c01 = 0, c11 = 0, x0 = 0, x1 = 0;
-        Point p0 = d[first], p3 = d[last];
-        for (int i = 0; i < u.Length; i++)
-        {
-            double t = u[i], mt = 1 - t;
-            double b0 = mt * mt * mt, b1 = 3 * t * mt * mt, b2 = 3 * t * t * mt, b3 = t * t * t;
-            var a0 = t1 * b1; var a1 = t2 * b2;
-            c00 += a0 * a0; c01 += a0 * a1; c11 += a1 * a1;
-            var tmp = d[first + i] - new Point(p0.X * (b0 + b1) + p3.X * (b2 + b3), p0.Y * (b0 + b1) + p3.Y * (b2 + b3));
-            x0 += a0 * tmp; x1 += a1 * tmp;
-        }
-        double det = c00 * c11 - c01 * c01;
-        double al = det == 0 ? 0 : (x0 * c11 - x1 * c01) / det;
-        double ar = det == 0 ? 0 : (c00 * x1 - c01 * x0) / det;
-        double seg = (p3 - p0).Length, eps = 1e-6 * seg;
-        if (al < eps || ar < eps) al = ar = seg / 3;
-        return [p0, p0 + t1 * al, p3 + t2 * ar, p3];
-    }
-
-    private static Point Q(Point[] b, double t)
-    {
-        double mt = 1 - t;
-        double b0 = mt * mt * mt, b1 = 3 * t * mt * mt, b2 = 3 * t * t * mt, b3 = t * t * t;
-        return new Point(b[0].X * b0 + b[1].X * b1 + b[2].X * b2 + b[3].X * b3, b[0].Y * b0 + b[1].Y * b1 + b[2].Y * b2 + b[3].Y * b3);
-    }
-
-    private static double MaxError(Point[] d, int first, int last, Point[] bez, double[] u, out int split)
-    {
-        double max = 0;
-        split = (first + last) / 2;
-        for (int i = first + 1; i < last; i++)
-        {
-            double e = (Q(bez, u[i - first]) - d[i]).LengthSquared;
-            if (e >= max) { max = e; split = i; }
-        }
-        return max;
-    }
-
-    private static double[] Reparameterize(Point[] d, int first, int last, double[] u, Point[] b)
-    {
-        var q1 = new[] { new Point(3 * (b[1].X - b[0].X), 3 * (b[1].Y - b[0].Y)), new Point(3 * (b[2].X - b[1].X), 3 * (b[2].Y - b[1].Y)), new Point(3 * (b[3].X - b[2].X), 3 * (b[3].Y - b[2].Y)) };
-        var q2 = new[] { new Point(2 * (q1[1].X - q1[0].X), 2 * (q1[1].Y - q1[0].Y)), new Point(2 * (q1[2].X - q1[1].X), 2 * (q1[2].Y - q1[1].Y)) };
-        var outp = new double[u.Length];
-        for (int i = 0; i < u.Length; i++)
-        {
-            double t = u[i], mt = 1 - t;
-            var qt = Q(b, t);
-            var q1t = new Point(q1[0].X * mt * mt + q1[1].X * 2 * t * mt + q1[2].X * t * t, q1[0].Y * mt * mt + q1[1].Y * 2 * t * mt + q1[2].Y * t * t);
-            var q2t = new Point(q2[0].X * mt + q2[1].X * t, q2[0].Y * mt + q2[1].Y * t);
-            var diff = qt - d[first + i];
-            double num = diff.X * q1t.X + diff.Y * q1t.Y;
-            double den = q1t.X * q1t.X + q1t.Y * q1t.Y + diff.X * q2t.X + diff.Y * q2t.Y;
-            outp[i] = Math.Abs(den) < 1e-12 ? t : Math.Clamp(t - num / den, 0, 1);
-        }
-        return outp;
-    }
-
     /// <summary>The fitted curves sampled densely (x, y, pressure), ready for the nib sweep.</summary>
     public static List<double[]> SampleFit(IReadOnlyList<double[]> fit)
     {
@@ -369,8 +424,8 @@ public static class StrokeGeometry
             for (int i = outp.Count == 0 ? 0 : 1; i <= n; i++)
             {
                 double t = i / (double)n;
-                var p = Q(b, t);
-                outp.Add([p.X, p.Y, c[8] + (c[9] - c[8]) * t]);
+                double mt = 1 - t, b0 = mt * mt * mt, b1 = 3 * t * mt * mt, b2 = 3 * t * t * mt, b3 = t * t * t;
+                outp.Add([b[0].X * b0 + b[1].X * b1 + b[2].X * b2 + b[3].X * b3, b[0].Y * b0 + b[1].Y * b1 + b[2].Y * b2 + b[3].Y * b3, c[8] + (c[9] - c[8]) * t]);
             }
         }
         return outp;

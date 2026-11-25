@@ -60,6 +60,13 @@ jobs:
           Run 'Arabic'  'Dark'  'annotate-brush' '03b-annotate-brush-ar'
           Run 'English' 'Dark'  'brush-options'  '03c-brush-options'
           Run 'Arabic'  'Dark'  'artboard'       '03d-artboard-ar'
+          Run 'English' 'Dark'  'tabs'           '03e-tabs'
+          Run 'English' 'Dark'  'annotate-edit'  '03f-stroke-edit'
+          Run 'English' 'Dark'  'compact'        '03g-compact'
+          Run 'Arabic'  'Dark'  'compact'        '03h-compact-ar'
+          Run 'English' 'Dark'  'library-add'    '02b-library-add'
+          Get-ChildItem -Recurse -Filter *.svg (Join-Path $db 'Library') | ForEach-Object { Copy-Item $_.FullName (Join-Path $PWD "shots\$($_.BaseName -replace '[^0-9A-Za-z_-]','_').svg") }
+          Get-Content (Join-Path $db 'Library\diwani\report.csv') | Write-Host
           Run 'Arabic'  'Dark'  'annotate-save'  '04-annotate-saved-ar'
           Run 'Arabic'  'Dark'  'letters'        '05-letters-ar'
           Run 'Arabic'  'Dark'  'letters-detail' '05b-letter-detail-ar'
@@ -87,6 +94,7 @@ jobs:
           $tmp = Join-Path $env:RUNNER_TEMP 'shots-branch'
           New-Item -ItemType Directory -Force $tmp | Out-Null
           Copy-Item shots\*.png $tmp -ErrorAction SilentlyContinue
+          Copy-Item shots\*.svg $tmp -ErrorAction SilentlyContinue
           $url = git config --get remote.origin.url
           $auth = git config --get http.https://github.com/.extraheader
           Push-Location $tmp

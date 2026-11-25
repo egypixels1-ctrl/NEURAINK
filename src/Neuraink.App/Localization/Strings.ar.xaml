@@ -141,7 +141,7 @@
     <sys:String x:Key="Tool.brush">الفرشاة</sys:String>
     <sys:String x:Key="Tool.stroke">فرشاة</sys:String>
     <sys:String x:Key="Tool.ornament">زخرفة جمالية</sys:String>
-    <sys:String x:Key="Hint.brush">ارسم بالفرشاة فوق «{0}» ({1}) — بعدها ينتقل للحرف التالي تلقائيًا (اضغط Shift لتبقى عليه، للنقاط)</sys:String>
+    <sys:String x:Key="Hint.brush">ارسم بالفرشاة فوق «{0}» ({1}) — بعدها ينتقل للحرف التالي تلقائيًا (اضغط Shift لتبقى عليه، للنقاط) · Ctrl+نقر على ضربة لتعديلها</sys:String>
     <sys:String x:Key="Hint.ornament">ارسم الزخارف الجمالية بالفرشاة (اختيارية للتجميل)</sys:String>
     <sys:String x:Key="Brush.Title">الفرشاة</sys:String>
     <sys:String x:Key="Brush.Size">الحجم</sys:String>
@@ -197,4 +197,37 @@
     <sys:String x:Key="Brush.Opacity">الشفافية</sys:String>
     <sys:String x:Key="Key.AltWheel">تدوير الفرشاة (5° · مع Shift درجة)</sys:String>
     <sys:String x:Key="Key.AltDrag">القلم: تحريك مقبض وحده · Alt+نقر آخر نقطة: حذف مقبضها</sys:String>
+    <sys:String x:Key="Tabs.AskSave">حفظ التعديلات على «{0}»؟</sys:String>
+    <sys:String x:Key="Tabs.AskSaveAll">في {0} من المخطوطات المفتوحة تعديلات غير محفوظة. هل تحفظها قبل الإغلاق؟</sys:String>
+    <sys:String x:Key="Tabs.Unsaved">تعديلات غير محفوظة</sys:String>
+    <sys:String x:Key="Tabs.Close">إغلاق (Ctrl+W · زر الماوس الأوسط)</sys:String>
+    <sys:String x:Key="Tabs.None">لا توجد مخطوطة مفتوحة</sys:String>
+    <sys:String x:Key="Tabs.Next">فتح المخطوطة التالية للتقطيع</sys:String>
+    <sys:String x:Key="Panel.Fold">طيّ اللوحة</sys:String>
+    <sys:String x:Key="Panel.Open">فتح اللوحة</sys:String>
+    <sys:String x:Key="Panel.Resize">اسحب لتغيير العرض · نقر مزدوج: العرض الطبيعي</sys:String>
+    <sys:String x:Key="Nav.Collapse">طيّ القائمة</sys:String>
+    <sys:String x:Key="Nav.Expand">فتح القائمة</sys:String>
+    <sys:String x:Key="Brush.StreamLine">StreamLine</sys:String>
+    <sys:String x:Key="Brush.StreamLineTip">مثل Procreate: الضربة تتبع يدك بتأخير بسيط وبلا رعشة (0 = إيقاف)</sys:String>
+    <sys:String x:Key="Key.CtrlClick">الفرشاة: تحديد ضربة — اسحب نقاطها، أو ارسم فوق جزء منها لإعادة رسمه</sys:String>
+    <sys:String x:Key="Key.Delete">حذف الضربة المحددة</sys:String>
+    <sys:String x:Key="Key.Tabs">التبويب التالي · إغلاق التبويب</sys:String>
+    <sys:String x:Key="Lib.Add">إضافة مخطوطات</sys:String>
+    <sys:String x:Key="Lib.AddTip">صور بجودة عالية، أسود مصمت على أبيض نقي، واسم الملف هو النص. يُصنع لكل صورة ملف SVG.</sys:String>
+    <sys:String x:Key="Lib.Adding">جارٍ إضافة {0} / {1}…</sys:String>
+    <sys:String x:Key="Lib.AddFailed">تعذرت إضافة هذه الصور:&#x0a;{0}</sys:String>
+    <sys:String x:Key="Lib.NoName">اسم الملف لا يحتوي نصًا عربيًا</sys:String>
+    <sys:String x:Key="Lib.NoInk">لم يُعثر على حبر في الصورة</sys:String>
+    <sys:String x:Key="Lib.Selected">محدد: {0}</sys:String>
+    <sys:String x:Key="Lib.Delete">حذف</sys:String>
+    <sys:String x:Key="Lib.ClearSel">إلغاء التحديد (Esc)</sys:String>
+    <sys:String x:Key="Lib.Open">فتح</sys:String>
+    <sys:String x:Key="Lib.OpenNewTab">فتح في تبويب جديد</sys:String>
+    <sys:String x:Key="Lib.Select">تحديد</sys:String>
+    <sys:String x:Key="Lib.NPieces">{0} مخطوطات</sys:String>
+    <sys:String x:Key="Lib.DeleteAsk">حذف {0} من المكتبة؟&#x0a;تذهب الصورة وملف SVG والصورة المصغرة إلى سلة المحذوفات.</sys:String>
+    <sys:String x:Key="Lib.DeleteWork">{0} منها مقطّعة بالفعل.&#x0a;&#x0a;نعم — احذف تقطيعها وحروفها أيضًا.&#x0a;لا — أبقِها بيانات للتدريب.</sys:String>
+    <sys:String x:Key="Lib.RecycleFailed">تعذر نقل الملفات إلى سلة المحذوفات (خطأ {0}).</sys:String>
+    <sys:String x:Key="Lib.SortNew">المضاف أخيرًا</sys:String>
 </ResourceDictionary>

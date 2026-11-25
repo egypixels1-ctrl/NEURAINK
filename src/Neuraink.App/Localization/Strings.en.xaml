@@ -141,7 +141,7 @@
     <sys:String x:Key="Tool.brush">Brush</sys:String>
     <sys:String x:Key="Tool.stroke">Brush</sys:String>
     <sys:String x:Key="Tool.ornament">Ornament (decoration)</sys:String>
-    <sys:String x:Key="Hint.brush">Trace «{0}» ({1}) with the brush over the letter — then the next letter follows (hold Shift to stay, for dots)</sys:String>
+    <sys:String x:Key="Hint.brush">Trace «{0}» ({1}) with the brush over the letter — then the next letter follows (hold Shift to stay, for dots) · Ctrl+click a stroke to edit it</sys:String>
     <sys:String x:Key="Hint.ornament">Draw decorative ornaments with the brush (optional, aesthetic)</sys:String>
     <sys:String x:Key="Brush.Title">Brush</sys:String>
     <sys:String x:Key="Brush.Size">Size</sys:String>
@@ -197,4 +197,37 @@
     <sys:String x:Key="Brush.Opacity">Opacity</sys:String>
     <sys:String x:Key="Key.AltWheel">Turn the brush (5° · Shift 1°)</sys:String>
     <sys:String x:Key="Key.AltDrag">Pen: move one handle alone · Alt+click last point: cut its handle</sys:String>
+    <sys:String x:Key="Tabs.AskSave">Save the changes to «{0}»?</sys:String>
+    <sys:String x:Key="Tabs.AskSaveAll">{0} open piece(s) have unsaved changes. Save them before closing?</sys:String>
+    <sys:String x:Key="Tabs.Unsaved">Unsaved changes</sys:String>
+    <sys:String x:Key="Tabs.Close">Close (Ctrl+W · middle click)</sys:String>
+    <sys:String x:Key="Tabs.None">No piece is open</sys:String>
+    <sys:String x:Key="Tabs.Next">Open the next piece to segment</sys:String>
+    <sys:String x:Key="Panel.Fold">Fold the panel</sys:String>
+    <sys:String x:Key="Panel.Open">Open the panel</sys:String>
+    <sys:String x:Key="Panel.Resize">Drag to change the width · double-click: normal width</sys:String>
+    <sys:String x:Key="Nav.Collapse">Fold the menu</sys:String>
+    <sys:String x:Key="Nav.Expand">Open the menu</sys:String>
+    <sys:String x:Key="Brush.StreamLine">StreamLine</sys:String>
+    <sys:String x:Key="Brush.StreamLineTip">Like Procreate: the stroke follows your hand a little behind, without its shakes (0 = off)</sys:String>
+    <sys:String x:Key="Key.CtrlClick">Brush: select a stroke — drag its anchors, or draw over a part of it to redraw it</sys:String>
+    <sys:String x:Key="Key.Delete">Delete the selected stroke</sys:String>
+    <sys:String x:Key="Key.Tabs">Next tab · close the tab</sys:String>
+    <sys:String x:Key="Lib.Add">Add pieces</sys:String>
+    <sys:String x:Key="Lib.AddTip">Pictures in high quality, pure black on pure white; the file name is the text. An SVG is made for each one.</sys:String>
+    <sys:String x:Key="Lib.Adding">Adding {0} / {1}…</sys:String>
+    <sys:String x:Key="Lib.AddFailed">These pictures could not be added:&#x0a;{0}</sys:String>
+    <sys:String x:Key="Lib.NoName">the file name has no Arabic text</sys:String>
+    <sys:String x:Key="Lib.NoInk">no ink was found in the picture</sys:String>
+    <sys:String x:Key="Lib.Selected">{0} selected</sys:String>
+    <sys:String x:Key="Lib.Delete">Delete</sys:String>
+    <sys:String x:Key="Lib.ClearSel">Clear the selection (Esc)</sys:String>
+    <sys:String x:Key="Lib.Open">Open</sys:String>
+    <sys:String x:Key="Lib.OpenNewTab">Open in a new tab</sys:String>
+    <sys:String x:Key="Lib.Select">Select</sys:String>
+    <sys:String x:Key="Lib.NPieces">{0} pieces</sys:String>
+    <sys:String x:Key="Lib.DeleteAsk">Delete {0} from the library?&#x0a;The picture, its SVG and its thumbnail go to the Recycle Bin.</sys:String>
+    <sys:String x:Key="Lib.DeleteWork">{0} of them are already segmented.&#x0a;&#x0a;Yes — delete their segmentation and letters too.&#x0a;No — keep them as training data.</sys:String>
+    <sys:String x:Key="Lib.RecycleFailed">The files could not be moved to the Recycle Bin (error {0}).</sys:String>
+    <sys:String x:Key="Lib.SortNew">Added last</sys:String>
 </ResourceDictionary>

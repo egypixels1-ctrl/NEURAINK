@@ -87,6 +87,8 @@ public sealed partial class LibraryTile : ObservableObject
     public bool IsDone => State is "done" or "partial";
     public bool IsRejected => State == "rejected";
     [ObservableProperty] private BitmapSource? _image;
+    /// <summary>Ticked for removing several pieces at once.</summary>
+    [ObservableProperty] private bool _isSelected;
 }
 
 public sealed partial class LibraryViewModel : ObservableObject
@@ -100,11 +102,17 @@ public sealed partial class LibraryViewModel : ObservableObject
     [ObservableProperty] private string _search = "";
     [ObservableProperty] private string _filter = "all";        // all | todo | done | rejected
     [ObservableProperty] private bool _singleWord;
-    [ObservableProperty] private int _sortIndex;                 // 0 frequent, 1 best, 2 file order
+    [ObservableProperty] private int _sortIndex;                 // 0 frequent, 1 best, 2 file order, 3 added last
     [ObservableProperty] private string _countText = "";
     [ObservableProperty] private bool _hasMore;
     [ObservableProperty] private bool _isEmpty;
     [ObservableProperty] private bool _libraryMissing;
+    [ObservableProperty] private int _selectedCount;
+    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _busyText = "";
+    public bool HasSelection => SelectedCount > 0;
+    public string SelectedText => Loc.F("Lib.Selected", SelectedCount);
+    partial void OnSelectedCountChanged(int value) { OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(SelectedText)); }
 
     public LibraryViewModel(MainViewModel main)
     {
@@ -137,12 +145,14 @@ public sealed partial class LibraryViewModel : ObservableObject
         {
             1 => items.OrderBy(i => i.Tier.Length == 0).ThenByDescending(i => i.Freq).ThenBy(i => i.Id),
             2 => items.OrderBy(i => i.Id),
+            3 => items.OrderByDescending(i => i.IsArtboard ? 0 : i.Id),   // the pieces added last first
             _ => items.OrderBy(i => !i.IsArtboard).ThenByDescending(i => i.Freq).ThenBy(i => i.Text, StringComparer.Ordinal).ThenBy(i => i.Id),
         };
         _matches = items.ToList();
         CountText = Loc.F("Lib.Count", _matches.Count.ToString("N0"));
         IsEmpty = lib.Found && _matches.Count == 0;
         Tiles.Clear();
+        SelectedCount = 0;
         _loading?.Cancel();
         _loading = new CancellationTokenSource();
         AddPage(_loading.Token);
@@ -158,6 +168,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         foreach (var it in page)
         {
             var tile = new LibraryTile { Item = it, State = _main.Annotations.State(it.Id) };
+            tile.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(LibraryTile.IsSelected)) SelectedCount = Tiles.Count(t => t.IsSelected); };
             Tiles.Add(tile);
             var path = lib.FullPath(it.Png);
             _ = Task.Run(() =>
@@ -171,7 +182,57 @@ public sealed partial class LibraryViewModel : ObservableObject
         HasMore = Tiles.Count < _matches.Count;
     }
 
-    [RelayCommand] private void Open(LibraryTile? tile) { if (tile != null) _main.OpenAnnotate(tile.Item.Id); }
+    /// <summary>A click opens the piece (Ctrl: in a new tab); while pieces are ticked, a click ticks it too.</summary>
+    [RelayCommand]
+    private void Open(LibraryTile? tile)
+    {
+        if (tile == null) return;
+        if (HasSelection) { tile.IsSelected = !tile.IsSelected; return; }
+        bool ctrl = (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
+        _main.OpenAnnotate(tile.Item.Id, newTab: ctrl);
+    }
+
+    [RelayCommand] private void OpenNewTab(LibraryTile? tile) { if (tile != null) _main.OpenAnnotate(tile.Item.Id, newTab: true); }
+    [RelayCommand] private void ClearSelection() { foreach (var t in Tiles) t.IsSelected = false; }
+
+    /// <summary>Removes the ticked pieces (or this one): to the Recycle Bin, with their SVG and thumbnail.</summary>
+    [RelayCommand]
+    private void Delete(LibraryTile? tile)
+    {
+        var list = tile != null && !tile.IsSelected ? new List<LibraryTile> { tile } : Tiles.Where(t => t.IsSelected).ToList();
+        if (list.Count == 0) return;
+        _main.DeletePieces(list.Select(t => t.Item).ToList());
+    }
+
+    /// <summary>Adds pictures (pure black on white, the file name is the text); the window opens on the Desktop.</summary>
+    [RelayCommand]
+    private async Task Add()
+    {
+        if (IsBusy) return;
+        var d = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = Loc.T("Board.Pictures") + "|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.tif;*.tiff",
+            Multiselect = true,
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+        };
+        if (d.ShowDialog(Application.Current?.MainWindow) != true || d.FileNames.Length == 0) return;
+        await AddFiles(d.FileNames);
+    }
+
+    /// <summary>Pictures dropped on the library, or picked in the window.</summary>
+    public async Task AddFiles(IReadOnlyList<string> files)
+    {
+        if (IsBusy || files.Count == 0) return;
+        IsBusy = true;
+        BusyText = Loc.F("Lib.Adding", 0, files.Count);
+        try
+        {
+            var progress = new Progress<int>(n => BusyText = Loc.F("Lib.Adding", n, files.Count));
+            int added = await _main.AddPieces(files, progress);
+            if (added > 0) { Search = ""; Filter = "all"; SortIndex = 3; Reload(); }
+        }
+        finally { IsBusy = false; }
+    }
     [RelayCommand] private void SetFilter(string? f) => Filter = f ?? "all";
 }
 

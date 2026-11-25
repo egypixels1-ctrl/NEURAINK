@@ -18,7 +18,7 @@ public partial class AnnotateView : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
-        Unloaded += (_, _) => Attach(null);
+        Unloaded += (_, _) => { if (_vm?.CurrentTab is { } t) OnSavingView(t); Attach(null); };
         DataContextChanged += (_, _) => { if (IsLoaded) Attach(DataContext as AnnotateViewModel); };
         PreviewKeyDown += OnKey;
         PreviewKeyUp += OnKeyUp;
@@ -30,18 +30,21 @@ public partial class AnnotateView : UserControl
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         Attach(DataContext as AnnotateViewModel);
-        Dispatcher.BeginInvoke(() => { Fit(); Focus(); }, System.Windows.Threading.DispatcherPriority.Loaded);
+        ApplyPanel();
+        Dispatcher.BeginInvoke(() => { ShowTabView(); Focus(); }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void Attach(AnnotateViewModel? vm)
     {
-        if (_vm != null) { _vm.Redraw -= Draw; _vm.Opened -= OnOpened; _vm.PropertyChanged -= OnVmChanged; }
+        if (_vm != null) { _vm.Redraw -= Draw; _vm.Opened -= OnOpened; _vm.PropertyChanged -= OnVmChanged; _vm.SavingView -= OnSavingView; }
         _vm = vm;
         if (_vm != null)
         {
             _vm.Redraw += Draw; _vm.Opened += OnOpened;
             _vm.EditBrushDialog = BrushOptionsWindow.Show;
             _vm.NewArtboardDialog = NewArtboardWindow.Ask;
+            _vm.AskSaveDialog = AskSave;
+            _vm.SavingView += OnSavingView;
             _vm.PropertyChanged += OnVmChanged;
             UpdateReference();
             Draw();
@@ -64,21 +67,131 @@ public partial class AnnotateView : UserControl
         }
     }
 
-    /// <summary>A soft pulse of the "!" when the guidance changes.</summary>
+    /// <summary>A soft, calm pulse of the yellow "!" when the guidance changes (its light fades a little and comes back).</summary>
     private void PulseHint()
     {
         Dispatcher.BeginInvoke(() =>
         {
             HintToggle.ApplyTemplate();
-            if (HintToggle.Template?.FindName("HintScale", HintToggle) is not ScaleTransform sc) return;
-            var anim = new System.Windows.Media.Animation.DoubleAnimation(1, 1.35, TimeSpan.FromMilliseconds(260))
+            if (HintToggle.Template?.FindName("Mark", HintToggle) is not UIElement mark) return;
+            var anim = new System.Windows.Media.Animation.DoubleAnimation(1, 0.4, TimeSpan.FromMilliseconds(700))
             {
                 AutoReverse = true, RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(2),
-                EasingFunction = new System.Windows.Media.Animation.SineEase(),
+                EasingFunction = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },
             };
-            sc.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
-            sc.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+            mark.BeginAnimation(OpacityProperty, anim);
         }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    // ------------------------------------------------------------------ tabs
+    private static bool? AskSave(string message)
+    {
+        var r = MessageBox.Show(Application.Current?.MainWindow!, message, "NEURAINK", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        return r switch { MessageBoxResult.Yes => true, MessageBoxResult.No => false, _ => null };
+    }
+
+    /// <summary>Another tab comes to the front: this one keeps its zoom and scroll.</summary>
+    private void OnSavingView(DocTab tab)
+    {
+        if (_vm?.Image == null) return;
+        tab.Zoom = _zoom;
+        tab.ScrollH = Scroller.HorizontalOffset;
+        tab.ScrollV = Scroller.VerticalOffset;
+    }
+
+    /// <summary>The tab in front shows as it was left (zoom, scroll), or fitted when it is new.</summary>
+    private void ShowTabView()
+    {
+        if (_vm?.CurrentTab is not { Zoom: > 0 } t || _vm.Image is not { } img) { Fit(); return; }
+        Paper.Width = img.PixelWidth;
+        Paper.Height = img.PixelHeight;
+        double vw = Math.Max(100, Scroller.ActualWidth - 70), vh = Math.Max(100, Scroller.ActualHeight - 70);
+        _fitZoom = Math.Min(Math.Min(vw / img.PixelWidth, vh / img.PixelHeight), 3);
+        SetZoom(t.Zoom);
+        double h = t.ScrollH, v = t.ScrollV;
+        Dispatcher.BeginInvoke(() => { Scroller.ScrollToHorizontalOffset(h); Scroller.ScrollToVerticalOffset(v); }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void OnTabMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_vm == null || (sender as FrameworkElement)?.DataContext is not DocTab tab) return;
+        if (e.ChangedButton == MouseButton.Middle) _vm.CloseTab(tab);
+        else if (e.ChangedButton == MouseButton.Left) _vm.Activate(tab);
+        Focus();
+        e.Handled = true;
+    }
+
+    private void OnTabClose(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DocTab tab) _vm?.CloseTab(tab);
+        Focus();
+    }
+
+    private void OnTabsWheel(object sender, MouseWheelEventArgs e)
+    {
+        TabScroller.ScrollToHorizontalOffset(TabScroller.HorizontalOffset - e.Delta / 3.0);
+        e.Handled = true;
+    }
+
+    // ------------------------------------------------------------------ the side panel: its width is dragged on its edge; folded to a slim bar
+    private const double PanelNormal = 340, PanelMin = 260, PanelMax = 620, PanelFoldAt = 200, PanelFolded = 40;
+    private double _dragWidth;
+
+    private Neuraink.Core.AppSettings? Settings => MainViewModel.Current?.Settings;
+
+    private void ApplyPanel()
+    {
+        if (Settings is not { } st) return;
+        bool folded = st.SidePanelCollapsed;
+        PanelCol.Width = new GridLength(folded ? PanelFolded : Math.Clamp(st.SidePanelWidth, PanelMin, PanelMax));
+        PanelScroll.Visibility = folded ? Visibility.Collapsed : Visibility.Visible;
+        PanelFolded.Visibility = folded ? Visibility.Visible : Visibility.Collapsed;
+        // the arrows point the way the panel goes: towards the edge of the window, or back from it
+        bool rtl = FlowDirection == FlowDirection.RightToLeft;
+        FoldGlyph.Text = rtl ? "\uE76B" : "\uE76C";     // » fold (towards the edge)
+        UnfoldGlyph.Text = rtl ? "\uE76C" : "\uE76B";   // « open again
+        _dragWidth = PanelCol.Width.Value;
+    }
+
+    private void OnFoldPanel(object sender, RoutedEventArgs e)
+    {
+        if (Settings is not { } st) return;
+        st.SidePanelCollapsed = !st.SidePanelCollapsed;
+        MainViewModel.Current?.SaveSettings();
+        ApplyPanel();
+        Focus();
+    }
+
+    private void OnPanelDrag(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        if (Settings is not { } st) return;
+        // the panel is on the far side of its edge: dragging away from it makes it narrower (mirrored in Arabic as well)
+        _dragWidth -= e.HorizontalChange;
+        if (_dragWidth < PanelFoldAt)
+        {
+            if (!st.SidePanelCollapsed) { st.SidePanelCollapsed = true; ApplyPanel(); _dragWidth = PanelFoldAt - 1; }
+            return;
+        }
+        if (st.SidePanelCollapsed) { st.SidePanelCollapsed = false; st.SidePanelWidth = PanelMin; ApplyPanel(); }
+        double w = Math.Clamp(_dragWidth, PanelMin, PanelMax);
+        PanelCol.Width = new GridLength(w);
+        st.SidePanelWidth = w;
+    }
+
+    private void OnPanelDragDone(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _dragWidth = PanelCol.Width.Value;
+        MainViewModel.Current?.SaveSettings();
+    }
+
+    private void OnPanelReset(object sender, MouseButtonEventArgs e)
+    {
+        if (Settings is not { } st) return;
+        st.SidePanelCollapsed = false;
+        st.SidePanelWidth = PanelNormal;
+        MainViewModel.Current?.SaveSettings();
+        ApplyPanel();
+        e.Handled = true;
     }
 
     /// <summary>Places the artboard's reference picture (position, scale) and its frame while adjusting.</summary>
@@ -96,13 +209,14 @@ public partial class AnnotateView : UserControl
         if (_vm.Image is { } img) { RefLayer.Width = img.PixelWidth; RefLayer.Height = img.PixelHeight; }
     }
 
-    private void OnOpened() => Dispatcher.BeginInvoke(() => { Fit(); Focus(); }, System.Windows.Threading.DispatcherPriority.Loaded);
+    private void OnOpened() => Dispatcher.BeginInvoke(() => { ShowTabView(); Focus(); }, System.Windows.Threading.DispatcherPriority.Loaded);
 
     // ------------------------------------------------------------------ zoom
     private void SetZoom(double z)
     {
         _zoom = Math.Clamp(z, 0.1, 8);
         Zoom.ScaleX = Zoom.ScaleY = _zoom;
+        if (_vm?.CurrentTab is { } tab && _vm.Image != null) tab.Zoom = _zoom;
         UpdateReference();
         Draw();
     }
@@ -161,6 +275,7 @@ public partial class AnnotateView : UserControl
     private Point? _mouse;
     private bool _stroking;
     private (PenNode Node, string Part)? _edit;
+    private (int K, string Part)? _fitEdit;
     private Point? _refDrag;
 
     /// <summary>Pen pressure of a tablet (0–1); 0 for a mouse (the nib keeps its size).</summary>
@@ -186,6 +301,22 @@ public partial class AnnotateView : UserControl
         }
         if (_vm.IsBrushTool)
         {
+            // Ctrl + click: select a stroke to edit it (like the selection tool under Ctrl in Illustrator); on nothing: none
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                _vm.SelectStroke(_vm.HitStroke(p, 6 / _zoom));
+                e.Handled = true;
+                return;
+            }
+            // an anchor or a handle of the selected stroke: dragged
+            if (_vm.HitFit(p, 7 / _zoom) is { } fh)
+            {
+                _vm.Checkpoint();
+                _fitEdit = fh;
+                Overlay.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
             _vm.BeginStroke(p, Pressure(e));
             Overlay.CaptureMouse();
             _stroking = true;
@@ -224,6 +355,12 @@ public partial class AnnotateView : UserControl
             else _vm.MoveHandle(ed.Node, ed.Part == "out", p, alt);
             return;
         }
+        if (_fitEdit is { } fe && e.LeftButton == MouseButtonState.Pressed)
+        {
+            if (fe.Part == "anchor") _vm.MoveFitAnchor(fe.K, p);
+            else _vm.MoveFitHandle(fe.K, fe.Part == "out", p, (Keyboard.Modifiers & ModifierKeys.Alt) != 0);
+            return;
+        }
         if (_stroking && e.LeftButton == MouseButtonState.Pressed) { _vm.ExtendStroke(p, Pressure(e), 1.2 / _zoom); return; }
         if (_vm.IsBrushTool) { Draw(); return; }   // nib preview follows the mouse
         if (_dragNode != null && e.LeftButton == MouseButtonState.Pressed)
@@ -241,6 +378,7 @@ public partial class AnnotateView : UserControl
             _stroking = false;
             _vm?.EndStroke(stay: (Keyboard.Modifiers & ModifierKeys.Shift) != 0, zoom: _zoom);
         }
+        if (_fitEdit != null) { _fitEdit = null; _vm?.EndFitEdit(); }
         _dragNode = null;
         _edit = null;
         _refDrag = null;
@@ -351,7 +489,10 @@ public partial class AnnotateView : UserControl
             case Key.Enter: _vm.CloseShape(); break;
             case Key.Back: _vm.BackspacePoint(); break;
             case Key.Escape: _vm.CancelDrawing(); break;
+            case Key.Tab when ctrl: _vm.CycleTab((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1); break;
+            case Key.W when ctrl: _vm.CloseTab(null); break;
             case Key.Tab: _vm.SkipStep(); break;
+            case Key.Delete: if (!_vm.DeleteSelectedStroke()) return; break;
             case Key.Z when ctrl && (Keyboard.Modifiers & ModifierKeys.Shift) != 0: _vm.RedoStep(); break;
             case Key.Z when ctrl: _vm.UndoStep(); break;
             case Key.Y when ctrl: _vm.RedoStep(); break;
@@ -360,6 +501,7 @@ public partial class AnnotateView : UserControl
             case Key.OemPlus or Key.Add when ctrl: SetZoom(_zoom * 1.25); break;
             case Key.OemMinus or Key.Subtract when ctrl: SetZoom(_zoom / 1.25); break;
             case Key.D0 or Key.NumPad0 when ctrl: Fit(); break;
+            case Key.S when ctrl: _vm.SaveInPlace(); break;
             case Key.S when !ctrl: _vm.Save(); break;
             case Key.D1 or Key.NumPad1: _vm.SetToolByKey(1); break;
             case Key.D2 or Key.NumPad2: _vm.SetToolByKey(2); break;
@@ -424,6 +566,34 @@ public partial class AnnotateView : UserControl
                 Fill = new SolidColorBrush(Color.FromArgb((byte)(255 * Math.Clamp(s.Brush!.Opacity, 0.05, 1)), c.R, c.G, c.B)),
                 IsHitTestVisible = false,
             });
+        }
+        // the selected stroke (Ctrl + click): its outline, anchors and handles, like a path selected in Illustrator
+        if (_vm.SelectedStroke is { } sel)
+        {
+            var accent = ThemeService.AccentColor;
+            var ab = new SolidColorBrush(accent);
+            Overlay.Children.Add(new Shapes.Path { Data = StrokeGeometry.ForSegment(sel), Stroke = ab, StrokeThickness = 1.5 * px, IsHitTestVisible = false });
+            if (sel.Fit is { Count: > 0 } fit)
+            {
+                var spine = new PathGeometry();
+                var fig = new PathFigure { StartPoint = new Point(fit[0][0], fit[0][1]) };
+                foreach (var c0 in fit) fig.Segments.Add(new BezierSegment(new Point(c0[2], c0[3]), new Point(c0[4], c0[5]), new Point(c0[6], c0[7]), true));
+                spine.Figures.Add(fig);
+                Overlay.Children.Add(new Shapes.Path { Data = spine, Stroke = ab, StrokeThickness = 1 * px, IsHitTestVisible = false });
+                for (int k = 0; k <= fit.Count; k++)
+                {
+                    var a = AnnotateViewModel.AnchorOf(fit, k);
+                    if (k < fit.Count) Handle(a, new Point(fit[k][2], fit[k][3]));
+                    if (k > 0) Handle(a, new Point(fit[k - 1][4], fit[k - 1][5]));
+                    Square(a.X, a.Y, 3.5 * px, Colors.White, accent, px);
+                }
+                void Handle(Point a, Point h)
+                {
+                    if ((h - a).Length < 0.5 * px) return;
+                    Overlay.Children.Add(new Shapes.Line { X1 = a.X, Y1 = a.Y, X2 = h.X, Y2 = h.Y, Stroke = ab, StrokeThickness = 1 * px, IsHitTestVisible = false });
+                    Dot(h.X, h.Y, 3 * px, accent, px, accent);
+                }
+            }
         }
         if (_vm.CurrentStroke.Count > 0)
         {

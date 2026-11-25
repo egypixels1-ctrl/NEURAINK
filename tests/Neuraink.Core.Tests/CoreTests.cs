@@ -174,3 +174,75 @@ public class VersioningTests
         Assert.Equal(DataVersion.SplitFor("محمد"), a.Split);
     }
 }
+
+public class LibraryEditorTests
+{
+    [Fact]
+    public void CleanNameLikeTheTriage() => Assert.Equal("محمد", LibraryEditor.CleanName("محمد (2) final_v3"));
+
+    [Fact]
+    public void AddAndRemoveRows()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "neuraink-lib-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(1, LibraryEditor.NextId(dir));
+            LibraryEditor.AddRow(dir, new Dictionary<string, string> { ["id"] = "7", ["text"] = "سامي, الغالي", ["status"] = "clean", ["clean_png"] = "clean_png/00007_x.png" });
+            LibraryEditor.AddRow(dir, new Dictionary<string, string> { ["id"] = "8", ["text"] = "محمد", ["status"] = "clean", ["clean_png"] = "clean_png/00008_y.png" });
+            Assert.Equal(9, LibraryEditor.NextId(dir));
+            Assert.Equal(12, LibraryEditor.NextId(dir, [11, 900005]));
+            var lib = new Library(dir);
+            Assert.Equal(2, lib.Items.Count);
+            Assert.Equal("سامي, الغالي", lib.Get(7)!.Text);
+            Assert.Equal(1, LibraryEditor.RemoveRows(dir, [7]));
+            lib = new Library(dir);
+            Assert.Single(lib.Items);
+            Assert.Null(lib.Get(7));
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+}
+
+public class TracerTests
+{
+    [Fact]
+    public void TracesARingWithItsHole()
+    {
+        int w = 40, h = 40;
+        var ink = new bool[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                double d = Math.Sqrt((x + 0.5 - 20) * (x + 0.5 - 20) + (y + 0.5 - 20) * (y + 0.5 - 20));
+                ink[y * w + x] = d < 15 && d > 8;
+            }
+        var loops = Tracer.Trace(ink, w, h);
+        Assert.Equal(2, loops.Count);   // outer edge and hole
+        // every point of the curves lies on the ring (its edges are at radius 8 and 15)
+        foreach (var l in loops)
+            foreach (var c in l)
+                for (int k = 0; k <= 8; k++)
+                {
+                    double t = k / 8.0, u = 1 - t;
+                    double x = u * u * u * c[0] + 3 * u * u * t * c[2] + 3 * u * t * t * c[4] + t * t * t * c[6];
+                    double y = u * u * u * c[1] + 3 * u * u * t * c[3] + 3 * u * t * t * c[5] + t * t * t * c[7];
+                    double d = Math.Sqrt((x - 20) * (x - 20) + (y - 20) * (y - 20));
+                    Assert.InRange(d, 6.5, 16.5);
+                }
+        var svg = Tracer.ToSvg(ink, w, h);
+        Assert.Contains("fill-rule=\"evenodd\"", svg);
+        Assert.Equal(2, svg.Count(ch => ch == 'Z'));
+    }
+
+    [Fact]
+    public void KeepsSquareCorners()
+    {
+        int w = 30, h = 30;
+        var ink = new bool[w * h];
+        for (int y = 5; y < 25; y++) for (int x = 5; x < 25; x++) ink[y * w + x] = true;
+        var l = Assert.Single(Tracer.Trace(ink, w, h));
+        // the four corners of the square are anchors of the outline
+        foreach (var (cx, cy) in new[] { (5.5, 5.0), (25.0, 5.5), (24.5, 25.0), (5.0, 24.5) })
+            Assert.Contains(l, c => Math.Abs(c[0] - cx) < 1.6 && Math.Abs(c[1] - cy) < 1.6);
+    }
+}

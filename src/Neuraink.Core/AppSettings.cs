@@ -45,6 +45,16 @@ public sealed class AppSettings
     public double PictureOpacity { get; set; } = 1;
     /// <summary>Show a small picture of the original while segmenting.</summary>
     public bool ShowOriginal { get; set; } = true;
+    /// <summary>Brush StreamLine, like Procreate: live smoothing of the hand while drawing, 0 (off) … 100 %.</summary>
+    public int StreamLine { get; set; } = 30;
+    /// <summary>Segmentation: width of the side panel (it can be dragged), and whether it is folded away.</summary>
+    public double SidePanelWidth { get; set; } = 340;
+    public bool SidePanelCollapsed { get; set; }
+    /// <summary>The main menu folded to its icons.</summary>
+    public bool NavCollapsed { get; set; }
+    /// <summary>Segmentation: the pieces open in tabs (ids), and the tab in front.</summary>
+    public List<int> OpenTabs { get; set; } = [];
+    public int ActiveTab { get; set; }
 
     /// <summary>Settings of older versions: the folder that held the library becomes the database folder.</summary>
     public void FillDefaults()
@@ -59,6 +69,9 @@ public sealed class AppSettings
         foreach (var b in Brushes)
             if (System.Text.RegularExpressions.Regex.IsMatch(b.Name ?? "", @"^Calligraphic \d+°$")) b.Name = "Calligraphic";
         Brush = null;
+        StreamLine = Math.Clamp(StreamLine, 0, 100);
+        if (SidePanelWidth < 260 || SidePanelWidth > 900) SidePanelWidth = 340;
+        OpenTabs = OpenTabs.Distinct().Take(30).ToList();
     }
 }
 
