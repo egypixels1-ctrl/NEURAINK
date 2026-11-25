@@ -289,7 +289,18 @@
                                 <!-- folds the panel away (its width is dragged on its edge) -->
                                 <Button x:Name="FoldPanel" DockPanel.Dock="Left" Click="OnFoldPanel" Padding="5,3" Margin="0,0,8,0" VerticalAlignment="Center"
                                         ToolTip="{DynamicResource Panel.Fold}" Focusable="False">
-                                    <Path Data="M2,1 L6,5 L2,9" Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10" />
+                                    <Path Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10">
+                                        <Path.Style>
+                                            <Style TargetType="Path">
+                                                <Setter Property="Data" Value="M2,1 L6,5 L2,9" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
+                                                        <Setter Property="Data" Value="M6,1 L2,5 L6,9" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
                                 </Button>
                                 <TextBlock Text="{DynamicResource Ann.Text}" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
                             </DockPanel>

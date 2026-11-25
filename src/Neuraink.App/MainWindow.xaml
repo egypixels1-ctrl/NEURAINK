@@ -81,7 +81,19 @@
                                     <Button x:Name="Fold" DockPanel.Dock="Right" Padding="5,2" Margin="6,0,0,0" VerticalAlignment="Center" Focusable="False" Visibility="Collapsed"
                                             Command="{Binding DataContext.ToggleNavCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Background="Transparent" BorderThickness="0" ToolTip="{DynamicResource Nav.Collapse}">
-                                        <Path Data="M6,1 L2,5 L6,9" Stroke="{DynamicResource TextFillColorSecondaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10" />
+                                        <!-- inside the list the chevron is not turned by the layout: it is chosen by the language -->
+                                        <Path Stroke="{DynamicResource TextFillColorSecondaryBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="10">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Data" Value="M6,1 L2,5 L6,9" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}}" Value="RightToLeft">
+                                                            <Setter Property="Data" Value="M2,1 L6,5 L2,9" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
                                     </Button>
                                     <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Padding="7,0"
                                             Visibility="{Binding IsSoon, Converter={StaticResource BoolToVis}}">
