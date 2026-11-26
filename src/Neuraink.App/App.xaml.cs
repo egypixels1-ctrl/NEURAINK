@@ -90,6 +90,39 @@ public partial class App : Application
                     vm.Annotate.SelectStroke(vm.Annotate.Ann.Segments.FirstOrDefault(x => x.Kind == "stroke"));
                 }, DispatcherPriority.ContextIdle);
                 break;
+            case "select-tool":
+                // the Selection tool: a stroke picked, its box with eight handles
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    DemoBrush(vm.Annotate);
+                    vm.Annotate.UseSelect();
+                    if (vm.Annotate.Ann.Segments.FirstOrDefault(x => x.Kind == "stroke") is { } st)
+                    {
+                        var b = AnnotateViewModel.ShapeOf(st).Bounds;
+                        vm.Annotate.SelectAt(new Point(b.X + b.Width / 2, b.Y + b.Height / 2), 40, false);
+                        if (!vm.Annotate.HasSelection) vm.Annotate.SelectIn(b, false);
+                    }
+                }, DispatcherPriority.ContextIdle);
+                break;
+            case "curvature":
+                // the Curvature tool: a stroke's points, and a new stroke built point by point
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    DemoBrush(vm.Annotate);
+                    var a = vm.Annotate;
+                    if (a.Image is not { } img) return;
+                    double w = img.PixelWidth, h = img.PixelHeight;
+                    a.UseCurvature();
+                    a.AddCurvPoint(new Point(w * 0.20, h * 0.80), false);
+                    a.AddCurvPoint(new Point(w * 0.35, h * 0.62), false);
+                    a.AddCurvPoint(new Point(w * 0.50, h * 0.85), true);
+                    a.AddCurvPoint(new Point(w * 0.66, h * 0.70), false);
+                    a.FinishCurvDraft();
+                    a.CurvPoint = 1;
+                }, DispatcherPriority.ContextIdle);
+                break;
             case "compact":
                 // the menu folded to its icons and the side panel folded: the picture takes the room
                 vm.NavCollapsed = true;
@@ -169,6 +202,7 @@ public partial class App : Application
             a.EndStroke(stay: false, zoom: 0.5);
         }
         Stroke((0.80, 0.30), (0.88, 0.45), (0.82, 0.62), (0.72, 0.70));
+        a.StepLetter(1);   // a right click: the next letter
         Stroke((0.62, 0.35), (0.58, 0.55), (0.50, 0.68), (0.40, 0.70));
     }
 

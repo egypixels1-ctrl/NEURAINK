@@ -141,7 +141,7 @@
     <sys:String x:Key="Tool.brush">الفرشاة</sys:String>
     <sys:String x:Key="Tool.stroke">فرشاة</sys:String>
     <sys:String x:Key="Tool.ornament">زخرفة جمالية</sys:String>
-    <sys:String x:Key="Hint.brush">ارسم بالفرشاة فوق «{0}» ({1}) — بعدها ينتقل للحرف التالي تلقائيًا (اضغط Shift لتبقى عليه، للنقاط) · Ctrl+نقر على ضربة لتعديلها</sys:String>
+    <sys:String x:Key="Hint.brush">ارسم «{0}» ({1}) بالفرشاة بأي عدد من الضربات — النقر الأيمن: الحرف التالي · Ctrl+نقر على ضربة لتعديلها</sys:String>
     <sys:String x:Key="Hint.ornament">ارسم الزخارف الجمالية بالفرشاة (اختيارية للتجميل)</sys:String>
     <sys:String x:Key="Brush.Title">الفرشاة</sys:String>
     <sys:String x:Key="Brush.Size">الحجم</sys:String>
@@ -149,7 +149,7 @@
     <sys:String x:Key="Brush.Roundness">الاستدارة</sys:String>
     <sys:String x:Key="Brush.AutoNext">الانتقال للحرف التالي بعد كل ضربة (Shift للبقاء)</sys:String>
     <sys:String x:Key="Pic.Opacity">شفافية الصورة</sys:String>
-    <sys:String x:Key="Key.Shift">أثناء الرسم: البقاء على نفس الحرف</sys:String>
+    <sys:String x:Key="Key.Shift">Shift + نقر أيمن: الحرف السابق</sys:String>
     <sys:String x:Key="Tool.diacritic">تشكيل لغوي</sys:String>
     <sys:String x:Key="Hint.diacritic">ارسم تشكيل «{0}» بالفرشاة (فتحة، ضمة، شدة، سكون …)</sys:String>
     <sys:String x:Key="Let.Rebuild">إعادة بناء مكتبة الحروف</sys:String>
@@ -208,8 +208,8 @@
     <sys:String x:Key="Panel.Resize">اسحب لتغيير العرض · نقر مزدوج: العرض الطبيعي</sys:String>
     <sys:String x:Key="Nav.Collapse">طيّ القائمة</sys:String>
     <sys:String x:Key="Nav.Expand">فتح القائمة</sys:String>
-    <sys:String x:Key="Brush.StreamLine">StreamLine</sys:String>
-    <sys:String x:Key="Brush.StreamLineTip">مثل Procreate: الضربة تتبع يدك بتأخير بسيط وبلا رعشة (0 = إيقاف)</sys:String>
+    <sys:String x:Key="Brush.StreamLine">التنعيم</sys:String>
+    <sys:String x:Key="Brush.StreamLineTip">مثل فرشاة Illustrator: الضربة تتبع يدك تمامًا وتُنعَّم لحظة رفعها (0 = كما رُسمت)</sys:String>
     <sys:String x:Key="Key.CtrlClick">الفرشاة: تحديد ضربة — اسحب نقاطها، أو ارسم فوق جزء منها لإعادة رسمه</sys:String>
     <sys:String x:Key="Key.Delete">حذف الضربة المحددة</sys:String>
     <sys:String x:Key="Key.Tabs">التبويب التالي · إغلاق التبويب</sys:String>
@@ -230,4 +230,12 @@
     <sys:String x:Key="Lib.DeleteWork">{0} منها مقطّعة بالفعل.&#x0a;&#x0a;نعم — احذف تقطيعها وحروفها أيضًا.&#x0a;لا — أبقِها بيانات للتدريب.</sys:String>
     <sys:String x:Key="Lib.RecycleFailed">تعذر نقل الملفات إلى سلة المحذوفات (خطأ {0}).</sys:String>
     <sys:String x:Key="Lib.SortNew">المضاف أخيرًا</sys:String>
+    <sys:String x:Key="Tool.Select">أداة التحديد (V): إمساك وتحريك وتكبير وتدوير</sys:String>
+    <sys:String x:Key="Tool.Curvature">أداة Curvature (Shift+~): ثني الضربة عبر نقاطها، أو بناء ضربة نقطة بنقطة</sys:String>
+    <sys:String x:Key="Key.RightClick">الحرف التالي (بعد الانتهاء منه)</sys:String>
+    <sys:String x:Key="Key.V">أداة التحديد · P القلم · B الفرشاة</sys:String>
+    <sys:String x:Key="Key.Curvature">أداة Curvature — نقر مزدوج على نقطة: زاوية ⇄ ناعمة</sys:String>
+    <sys:String x:Key="Key.XWheel">حجم الفرشاة</sys:String>
+    <sys:String x:Key="Ann.AllDone">اكتملت كل الحروف — اضغط حفظ والتالي</sys:String>
+    <sys:String x:Key="Ann.NowLetter">حرف «{0}» ({1})</sys:String>
 </ResourceDictionary>

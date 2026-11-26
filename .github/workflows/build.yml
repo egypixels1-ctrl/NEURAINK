@@ -62,6 +62,8 @@ jobs:
           Run 'Arabic'  'Dark'  'artboard'       '03d-artboard-ar'
           Run 'English' 'Dark'  'tabs'           '03e-tabs'
           Run 'English' 'Dark'  'annotate-edit'  '03f-stroke-edit'
+          Run 'English' 'Dark'  'select-tool'    '03i-select-tool'
+          Run 'English' 'Dark'  'curvature'      '03j-curvature'
           Run 'English' 'Dark'  'compact'        '03g-compact'
           Run 'Arabic'  'Dark'  'compact'        '03h-compact-ar'
           Run 'English' 'Dark'  'library-add'    '02b-library-add'

@@ -141,7 +141,7 @@
     <sys:String x:Key="Tool.brush">Brush</sys:String>
     <sys:String x:Key="Tool.stroke">Brush</sys:String>
     <sys:String x:Key="Tool.ornament">Ornament (decoration)</sys:String>
-    <sys:String x:Key="Hint.brush">Trace «{0}» ({1}) with the brush over the letter — then the next letter follows (hold Shift to stay, for dots) · Ctrl+click a stroke to edit it</sys:String>
+    <sys:String x:Key="Hint.brush">Trace «{0}» ({1}) with the brush, in as many strokes as you like — right click: next letter · Ctrl+click a stroke to edit it</sys:String>
     <sys:String x:Key="Hint.ornament">Draw decorative ornaments with the brush (optional, aesthetic)</sys:String>
     <sys:String x:Key="Brush.Title">Brush</sys:String>
     <sys:String x:Key="Brush.Size">Size</sys:String>
@@ -149,7 +149,7 @@
     <sys:String x:Key="Brush.Roundness">Roundness</sys:String>
     <sys:String x:Key="Brush.AutoNext">Next letter after each stroke (Shift: stay)</sys:String>
     <sys:String x:Key="Pic.Opacity">Picture opacity</sys:String>
-    <sys:String x:Key="Key.Shift">While drawing: stay on the same letter</sys:String>
+    <sys:String x:Key="Key.Shift">Shift + right click: the letter before</sys:String>
     <sys:String x:Key="Tool.diacritic">Tashkeel (linguistic)</sys:String>
     <sys:String x:Key="Hint.diacritic">Draw the tashkeel of «{0}» (fatha, damma, shadda, sukun …) with the brush</sys:String>
     <sys:String x:Key="Let.Rebuild">Rebuild letter library</sys:String>
@@ -208,8 +208,8 @@
     <sys:String x:Key="Panel.Resize">Drag to change the width · double-click: normal width</sys:String>
     <sys:String x:Key="Nav.Collapse">Fold the menu</sys:String>
     <sys:String x:Key="Nav.Expand">Open the menu</sys:String>
-    <sys:String x:Key="Brush.StreamLine">StreamLine</sys:String>
-    <sys:String x:Key="Brush.StreamLineTip">Like Procreate: the stroke follows your hand a little behind, without its shakes (0 = off)</sys:String>
+    <sys:String x:Key="Brush.StreamLine">Smoothing</sys:String>
+    <sys:String x:Key="Brush.StreamLineTip">Like the Illustrator Paintbrush: the stroke follows your hand exactly, and is smoothed the moment you lift it (0 = as drawn)</sys:String>
     <sys:String x:Key="Key.CtrlClick">Brush: select a stroke — drag its anchors, or draw over a part of it to redraw it</sys:String>
     <sys:String x:Key="Key.Delete">Delete the selected stroke</sys:String>
     <sys:String x:Key="Key.Tabs">Next tab · close the tab</sys:String>
@@ -230,4 +230,12 @@
     <sys:String x:Key="Lib.DeleteWork">{0} of them are already segmented.&#x0a;&#x0a;Yes — delete their segmentation and letters too.&#x0a;No — keep them as training data.</sys:String>
     <sys:String x:Key="Lib.RecycleFailed">The files could not be moved to the Recycle Bin (error {0}).</sys:String>
     <sys:String x:Key="Lib.SortNew">Added last</sys:String>
+    <sys:String x:Key="Tool.Select">Selection tool (V): pick, move, scale and turn</sys:String>
+    <sys:String x:Key="Tool.Curvature">Curvature tool (Shift+~): bend a stroke through its points, or build one point by point</sys:String>
+    <sys:String x:Key="Key.RightClick">Next letter (when it is finished)</sys:String>
+    <sys:String x:Key="Key.V">Selection tool · P pen · B brush</sys:String>
+    <sys:String x:Key="Key.Curvature">Curvature tool — double click a point: corner ⇄ smooth</sys:String>
+    <sys:String x:Key="Key.XWheel">Brush size</sys:String>
+    <sys:String x:Key="Ann.AllDone">Every letter is done — press Save &amp; next</sys:String>
+    <sys:String x:Key="Ann.NowLetter">Letter «{0}» ({1})</sys:String>
 </ResourceDictionary>

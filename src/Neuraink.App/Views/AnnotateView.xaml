@@ -64,16 +64,30 @@
                 <StackPanel>
                     <Button Command="{Binding ExportPdfCommand}" ToolTip="{DynamicResource Pdf.Export}" Style="{StaticResource RailButton}">
                         <Grid>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="16" />
-                            <TextBlock Text="PDF" FontSize="6" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,1" />
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="16" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <TextBlock Text="PDF" FontSize="6" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,1" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                         </Grid>
                     </Button>
                     <Border Height="1" Margin="4,2,4,8" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
+                    <Button Command="{Binding UseSelectCommand}" ToolTip="{DynamicResource Tool.Select}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource RailButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelectMode}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrandSoftBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <!-- the black arrow of Illustrator -->
+                        <Path Data="M0,0 L0,15 L4,11.4 L6.8,17.6 L9.2,16.5 L6.5,10.5 L11.5,10.5 Z" Fill="{DynamicResource TextFillColorPrimaryBrush}" Width="12" Height="18" Stretch="Uniform" />
+                    </Button>
                     <Button Command="{Binding UsePenCommand}" ToolTip="{DynamicResource Tool.PenSwitch}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource RailButton}">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsPenTool}" Value="True">
+                                    <DataTrigger Binding="{Binding IsDrawPen}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource BrandSoftBrush}" />
                                         <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
                                     </DataTrigger>
@@ -88,7 +102,7 @@
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource RailButton}">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsBrushTool}" Value="True">
+                                    <DataTrigger Binding="{Binding IsDrawBrush}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource BrandSoftBrush}" />
                                         <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
                                     </DataTrigger>
@@ -96,6 +110,25 @@
                             </Style>
                         </Button.Style>
                         <Path Data="{StaticResource PaintBrushGeometry}" Fill="{DynamicResource TextFillColorPrimaryBrush}" Width="18" Height="18" Stretch="Uniform" />
+                    </Button>
+                    <Button Command="{Binding UseCurvatureCommand}" ToolTip="{DynamicResource Tool.Curvature}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource RailButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCurvatureMode}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrandSoftBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <!-- a curve through points -->
+                        <Canvas Width="20" Height="18">
+                            <Path Data="M2,15 C5,3 14,3 18,13" Stroke="{DynamicResource TextFillColorPrimaryBrush}" StrokeThickness="1.6" />
+                            <Ellipse Canvas.Left="0" Canvas.Top="13" Width="4" Height="4" Fill="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <Ellipse Canvas.Left="8" Canvas.Top="4" Width="4" Height="4" Fill="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <Ellipse Canvas.Left="16" Canvas.Top="11" Width="4" Height="4" Fill="{DynamicResource TextFillColorPrimaryBrush}" />
+                        </Canvas>
                     </Button>
                 </StackPanel>
             </Border>
@@ -171,7 +204,10 @@
                                         <Image x:Name="RefPic" Source="{Binding Reference}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" Opacity="{Binding RefOpacity}" />
                                         <Border x:Name="RefFrame" BorderBrush="#FF3B82F6" BorderThickness="2" Visibility="{Binding AdjustReference, Converter={StaticResource BoolToVis}}" />
                                     </Canvas>
-                                    <Canvas x:Name="Overlay" Background="Transparent" Cursor="Pen" MouseLeftButtonDown="OnOverlayDown" MouseMove="OnOverlayMove" MouseLeftButtonUp="OnOverlayUp" MouseLeave="OnOverlayLeave" />
+                                    <Canvas x:Name="Overlay" Background="Transparent" Cursor="Pen" MouseLeftButtonDown="OnOverlayDown" MouseMove="OnOverlayMove" MouseLeftButtonUp="OnOverlayUp" MouseLeave="OnOverlayLeave"
+                                            MouseRightButtonDown="OnOverlayRight" />
+                                    <!-- what follows the mouse (the stroke being drawn, the nib, the rubber band): drawn alone, so nothing lags -->
+                                    <Canvas x:Name="Live" IsHitTestVisible="False" />
                                 </Grid>
                             </ScrollViewer>
 
@@ -469,7 +505,6 @@
                                 <TextBlock DockPanel.Dock="Right" Text="{DynamicResource Brush.Smooth}" Style="{StaticResource Muted}" FontSize="11" />
                                 <TextBlock Text="{DynamicResource Brush.Accurate}" Style="{StaticResource Muted}" FontSize="11" />
                             </DockPanel>
-                            <CheckBox Content="{DynamicResource Brush.AutoNext}" IsChecked="{Binding AutoNextLetter}" Margin="0,10,0,0" FontSize="12" Focusable="False" />
                         </StackPanel>
                     </Border>
 
@@ -507,7 +542,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                 </Grid.RowDefinitions>
                                 <Border Grid.Row="0" Style="{StaticResource Kbd}"><TextBlock Text="Click / Drag" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource Key.Pen}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
@@ -539,6 +574,14 @@
                                 <TextBlock Grid.Row="13" Grid.Column="1" Text="{DynamicResource Key.Delete}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
                                 <Border Grid.Row="14" Style="{StaticResource Kbd}"><TextBlock Text="Ctrl+Tab · Ctrl+W" FontSize="11" /></Border>
                                 <TextBlock Grid.Row="14" Grid.Column="1" Text="{DynamicResource Key.Tabs}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Border Grid.Row="15" Style="{StaticResource Kbd}"><TextBlock Text="Right click" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="15" Grid.Column="1" Text="{DynamicResource Key.RightClick}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Border Grid.Row="16" Style="{StaticResource Kbd}"><TextBlock Text="V" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="16" Grid.Column="1" Text="{DynamicResource Key.V}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Border Grid.Row="17" Style="{StaticResource Kbd}"><TextBlock Text="Shift + ~" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="17" Grid.Column="1" Text="{DynamicResource Key.Curvature}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Border Grid.Row="18" Style="{StaticResource Kbd}"><TextBlock Text="X + Wheel" FontSize="11" /></Border>
+                                <TextBlock Grid.Row="18" Grid.Column="1" Text="{DynamicResource Key.XWheel}" Style="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
                             </Grid>
                         </StackPanel>
                     </Border>

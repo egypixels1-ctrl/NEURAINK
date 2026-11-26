@@ -36,11 +36,11 @@ public partial class AnnotateView : UserControl
 
     private void Attach(AnnotateViewModel? vm)
     {
-        if (_vm != null) { _vm.Redraw -= Draw; _vm.Opened -= OnOpened; _vm.PropertyChanged -= OnVmChanged; _vm.SavingView -= OnSavingView; }
+        if (_vm != null) { _vm.Redraw -= Draw; _vm.Opened -= OnOpened; _vm.LiveStroke -= OnLiveStroke; _vm.PropertyChanged -= OnVmChanged; _vm.SavingView -= OnSavingView; }
         _vm = vm;
         if (_vm != null)
         {
-            _vm.Redraw += Draw; _vm.Opened += OnOpened;
+            _vm.Redraw += Draw; _vm.Opened += OnOpened; _vm.LiveStroke += OnLiveStroke;
             _vm.EditBrushDialog = BrushOptionsWindow.Show;
             _vm.NewArtboardDialog = NewArtboardWindow.Ask;
             _vm.AskSaveDialog = AskSave;
@@ -237,18 +237,21 @@ public partial class AnnotateView : UserControl
     private void OnWheel(object sender, MouseWheelEventArgs e)
     {
         var mods = Keyboard.Modifiers;
+        if (_xDown && _vm != null)
+        {
+            // X + wheel: the brush size (bigger steps on big brushes)
+            double sz = _vm.BrushSize, step = sz >= 40 ? 4 : sz >= 20 ? 2 : 1;
+            _vm.BrushSize = Math.Clamp(sz + (e.Delta > 0 ? step : -step), 1, 400);
+            Flash($"{_vm.BrushSize:0} px", e.GetPosition(Overlay));
+            e.Handled = true;
+            return;
+        }
         if ((mods & ModifierKeys.Alt) != 0 && _vm?.IsBrushTool == true)
         {
             // Alt + wheel turns the brush: 5° a notch, 1° with Shift
             double step = (mods & ModifierKeys.Shift) != 0 ? 1 : 5;
             var a = _vm.RotateBrush(e.Delta > 0 ? step : -step);
-            _angleFlash = $"{a:0}°";
-            _angleFlashUntil = DateTime.Now.AddMilliseconds(900);
-            _mouse = e.GetPosition(Overlay);
-            Draw();
-            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(950) };
-            t.Tick += (_, _) => { t.Stop(); Draw(); };
-            t.Start();
+            Flash($"{a:0}°", e.GetPosition(Overlay));
             e.Handled = true;
             return;
         }
@@ -264,6 +267,20 @@ public partial class AnnotateView : UserControl
             e.Handled = true;
         }
     }
+
+    /// <summary>A small label by the mouse for a moment (the brush angle or size).</summary>
+    private void Flash(string text, Point at)
+    {
+        _angleFlash = text;
+        _angleFlashUntil = DateTime.Now.AddMilliseconds(900);
+        _mouse = at;
+        DrawLive();
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(950) };
+        t.Tick += (_, _) => { t.Stop(); DrawLive(); };
+        t.Start();
+    }
+
+    private bool _xDown;
 
     // ------------------------------------------------------------------ input: pen tool (Illustrator style)
     private PenNode? _dragNode;
@@ -295,6 +312,8 @@ public partial class AnnotateView : UserControl
             e.Handled = true;
             return;
         }
+        if (_vm.IsSelectMode) { SelectDown(p, e); return; }
+        if (_vm.IsCurvatureMode) { CurvatureDown(p, e); return; }
         if (_vm.IsBrushTool)
         {
             // Ctrl + click: select a stroke to edit it (like the selection tool under Ctrl in Illustrator); on nothing: none
@@ -344,6 +363,13 @@ public partial class AnnotateView : UserControl
         var p = e.GetPosition(Overlay);
         _mouse = p;
         if (_refDrag is { } rd && e.LeftButton == MouseButtonState.Pressed) { _vm.MoveReference(p - rd); _refDrag = p; return; }
+        if (_vm.IsSelectMode) { SelectMove(p, e); return; }
+        if (_vm.IsCurvatureMode)
+        {
+            if (_curvDrag >= 0 && e.LeftButton == MouseButtonState.Pressed) _vm.MoveCurvPoint(_curvDrag, p);
+            else DrawLive();
+            return;
+        }
         if (_edit is { } ed && e.LeftButton == MouseButtonState.Pressed)
         {
             bool alt = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
@@ -357,14 +383,14 @@ public partial class AnnotateView : UserControl
             else _vm.MoveFitHandle(fe.K, fe.Part == "out", p, (Keyboard.Modifiers & ModifierKeys.Alt) != 0);
             return;
         }
-        if (_stroking && e.LeftButton == MouseButtonState.Pressed) { _vm.ExtendStroke(p, Pressure(e), 1.2 / _zoom); return; }
-        if (_vm.IsBrushTool) { Draw(); return; }   // nib preview follows the mouse
+        if (_stroking && e.LeftButton == MouseButtonState.Pressed) { _vm.ExtendStroke(p, Pressure(e), 0.6 / _zoom); return; }
+        if (_vm.IsBrushTool) { DrawLive(); return; }   // nib preview follows the mouse
         if (_dragNode != null && e.LeftButton == MouseButtonState.Pressed)
         {
             if ((p - _downAt).Length * _zoom > 3) _vm.DragHandles(_dragNode, p, (Keyboard.Modifiers & ModifierKeys.Alt) != 0);
             return;
         }
-        Draw();   // rubber band and pen cursor follow the mouse
+        DrawLive();   // rubber band and pen cursor follow the mouse
     }
 
     private void OnOverlayUp(object sender, MouseButtonEventArgs e)
@@ -375,6 +401,8 @@ public partial class AnnotateView : UserControl
             _vm?.EndStroke(stay: (Keyboard.Modifiers & ModifierKeys.Shift) != 0, zoom: _zoom);
         }
         if (_fitEdit != null) { _fitEdit = null; _vm?.EndFitEdit(); }
+        if (_curvDrag >= 0) { _curvDrag = -1; _vm?.EndCurvEdit(); }
+        if (_vm?.IsSelectMode == true) SelectUp(e.GetPosition(Overlay));
         _dragNode = null;
         _edit = null;
         _refDrag = null;
@@ -385,7 +413,193 @@ public partial class AnnotateView : UserControl
     {
         if (_stroking || _dragNode != null) return;
         _mouse = null;
-        Draw();
+        DrawLive();
+    }
+
+    /// <summary>Right click: the next letter (Shift: the one before) — when a letter is finished, like turning a page.</summary>
+    private void OnOverlayRight(object sender, MouseButtonEventArgs e)
+    {
+        Focus();
+        if (_vm == null || _stroking) return;
+        _vm.StepLetter((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1);
+        e.Handled = true;
+    }
+
+    // ------------------------------------------------------------------ Selection tool (V): pick, move, scale, turn (Illustrator)
+    private string? _tMode;          // move | scale | rotate | marquee
+    private Point _tFrom;
+    private Rect _tBox;
+    private (double X, double Y) _tHandle;
+    private bool _tMoved;
+
+    /// <summary>The handle of the box under the mouse: (0|0.5|1, 0|0.5|1) — or a rotation zone just outside a corner.</summary>
+    private (string Kind, double X, double Y)? BoxPart(Point p)
+    {
+        if (_vm == null || !_vm.HasSelection) return null;
+        var b = _vm.SelectionBounds();
+        if (b.IsEmpty) return null;
+        double r = 6 / _zoom;
+        foreach (var hx in new[] { 0, 0.5, 1 })
+            foreach (var hy in new[] { 0, 0.5, 1 })
+            {
+                if (hx == 0.5 && hy == 0.5) continue;
+                var h = new Point(b.X + b.Width * hx, b.Y + b.Height * hy);
+                if ((h - p).Length <= r) return ("scale", hx, hy);
+            }
+        foreach (var hx in new[] { 0.0, 1 })
+            foreach (var hy in new[] { 0.0, 1 })
+            {
+                var h = new Point(b.X + b.Width * hx, b.Y + b.Height * hy);
+                double d = (h - p).Length * _zoom;
+                if (d > 6 && d < 22 && !b.Contains(p)) return ("rotate", hx, hy);
+            }
+        return null;
+    }
+
+    private void SelectDown(Point p, MouseButtonEventArgs e)
+    {
+        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        _tFrom = p;
+        _tMoved = false;
+        if (BoxPart(p) is { } part)
+        {
+            _tMode = part.Kind;
+            _tHandle = (part.X, part.Y);
+            _tBox = _vm!.SelectionBounds();
+            _vm.BeginTransform();
+        }
+        else
+        {
+            var hit = _vm!.HitAny(p, 4 / _zoom);
+            if (hit == null) { if (!shift) _vm.ClearSelection(); _tMode = "marquee"; }
+            else
+            {
+                bool was = _vm.Selection.Contains(hit);
+                if (!was || shift) _vm.SelectAt(p, 4 / _zoom, shift);
+                if (_vm.Selection.Contains(hit)) { _tMode = "move"; _tBox = _vm.SelectionBounds(); _vm.BeginTransform(); }
+                else _tMode = null;
+            }
+        }
+        Overlay.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void SelectMove(Point p, MouseEventArgs e)
+    {
+        if (_vm == null) return;
+        if (e.LeftButton != MouseButtonState.Pressed || _tMode == null) { UpdateSelectCursor(p); DrawLive(); return; }
+        if (!_tMoved && (p - _tFrom).Length * _zoom < 2) return;
+        _tMoved = true;
+        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0, alt = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
+        var m = Matrix.Identity;
+        switch (_tMode)
+        {
+            case "marquee": DrawLive(); return;
+            case "move":
+            {
+                var d = p - _tFrom;
+                if (shift) { if (Math.Abs(d.X) > Math.Abs(d.Y)) d.Y = 0; else d.X = 0; }
+                m.Translate(d.X, d.Y);
+                break;
+            }
+            case "scale":
+            {
+                var (hx, hy) = _tHandle;
+                var anchor = alt ? new Point(_tBox.X + _tBox.Width / 2, _tBox.Y + _tBox.Height / 2)
+                                 : new Point(_tBox.X + _tBox.Width * (1 - hx), _tBox.Y + _tBox.Height * (1 - hy));
+                double sx = 1, sy = 1;
+                if (hx != 0.5 && Math.Abs(_tFrom.X - anchor.X) > 1e-6) sx = (p.X - anchor.X) / (_tFrom.X - anchor.X);
+                if (hy != 0.5 && Math.Abs(_tFrom.Y - anchor.Y) > 1e-6) sy = (p.Y - anchor.Y) / (_tFrom.Y - anchor.Y);
+                if (shift)
+                {
+                    if (hx == 0.5) sx = sy;
+                    else if (hy == 0.5) sy = sx;
+                    else { var u = Math.Abs(sx) > Math.Abs(sy) ? sx : sy; sx = sy = u; }
+                }
+                sx = Math.Abs(sx) < 0.01 ? 0.01 * Math.Sign(sx == 0 ? 1 : sx) : sx;
+                sy = Math.Abs(sy) < 0.01 ? 0.01 * Math.Sign(sy == 0 ? 1 : sy) : sy;
+                m.Translate(-anchor.X, -anchor.Y);
+                m.Scale(sx, sy);
+                m.Translate(anchor.X, anchor.Y);
+                break;
+            }
+            case "rotate":
+            {
+                var c = new Point(_tBox.X + _tBox.Width / 2, _tBox.Y + _tBox.Height / 2);
+                double a = (Math.Atan2(p.Y - c.Y, p.X - c.X) - Math.Atan2(_tFrom.Y - c.Y, _tFrom.X - c.X)) * 180 / Math.PI;
+                if (shift) a = Math.Round(a / 45) * 45;
+                m.RotateAt(a, c.X, c.Y);
+                Flash($"{(a % 360 + 360) % 360:0}°", p);
+                break;
+            }
+        }
+        _vm.ApplyTransform(m);
+    }
+
+    private void SelectUp(Point p)
+    {
+        if (_vm == null) return;
+        if (_tMode == "marquee" && _tMoved)
+            _vm.SelectIn(new Rect(_tFrom, p), (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+        else if (_tMode is "move" or "scale" or "rotate") _vm.EndTransform();
+        _tMode = null;
+        DrawLive();
+    }
+
+    private void UpdateSelectCursor(Point p)
+    {
+        if (_space || _panning) return;
+        var part = BoxPart(p);
+        Overlay.Cursor = part switch
+        {
+            { Kind: "rotate" } => Cursors.None,   // a turning arrow is drawn by the mouse
+            { Kind: "scale", X: 0.5 } => Cursors.SizeNS,
+            { Kind: "scale", Y: 0.5 } => Cursors.SizeWE,
+            { Kind: "scale" } k => (k.X == k.Y) ? Cursors.SizeNWSE : Cursors.SizeNESW,
+            _ => Cursors.Arrow,
+        };
+        _rotateCursor = part is { Kind: "rotate" };
+    }
+
+    private bool _rotateCursor;
+
+    // ------------------------------------------------------------------ Curvature tool (Shift+~)
+    private int _curvDrag = -1;
+
+    private void CurvatureDown(Point p, MouseButtonEventArgs e)
+    {
+        var vm = _vm!;
+        e.Handled = true;
+        if (vm.CurvDraft.Count > 0)
+        {
+            if (vm.IsOnFirstCurvPoint(p, 8 / _zoom)) { vm.FinishCurvDraft(close: true); return; }
+            if (e.ClickCount >= 2) vm.CornerLastCurvPoint(); else vm.AddCurvPoint(p, false);
+            return;
+        }
+        if (vm.SelectedStroke is { } sel)
+        {
+            double pathTol = Math.Max(6 / _zoom, (sel.Brush?.Size ?? 0) / 2);
+            if (vm.HitCurv(p, 7 / _zoom, pathTol) is { } h)
+            {
+                if (h.Part == "anchor" && e.ClickCount >= 2) { vm.ToggleCorner(h.K); return; }
+                vm.BeginCurvEdit(h.K);
+                _curvDrag = h.K;
+                Overlay.CaptureMouse();
+                return;
+            }
+        }
+        if (vm.HitStroke(p, 6 / _zoom) is { } other) { vm.SelectStroke(other); vm.CurvPoint = -1; return; }
+        vm.AddCurvPoint(p, false);
+    }
+
+    // ------------------------------------------------------------------ the stroke being drawn: only its new part is drawn
+    private StrokeGeometry.NibSweep? _sweep;
+    private Shapes.Path? _livePath;
+
+    private void OnLiveStroke()
+    {
+        if (_vm == null || _sweep == null || _livePath == null) { DrawLive(); return; }
+        for (int i = _sweep.Count; i < _vm.CurrentStroke.Count; i++) _sweep.Add(_vm.CurrentStroke[i]);
     }
 
     // ------------------------------------------------------------------ Brushes panel
@@ -482,13 +696,29 @@ public partial class AnnotateView : UserControl
             case Key.Space:
                 if (!_space) { _space = true; SetHand(true); }
                 break;
+            case Key.X: _xDown = true; break;
+            case Key.V when !ctrl: _vm.UseSelect(); break;
+            case Key.P when !ctrl: _vm.UsePenCommand.Execute(null); break;
+            case Key.B when !ctrl: _vm.UseBrushCommand.Execute(null); break;
+            case Key.Oem3 when (Keyboard.Modifiers & ModifierKeys.Shift) != 0: _vm.UseCurvature(); break;
+            case Key.Left or Key.Right or Key.Up or Key.Down when _vm.IsSelectMode && _vm.HasSelection:
+            {
+                double step = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? 10 : 1;
+                _vm.Nudge(e.Key == Key.Left ? -step : e.Key == Key.Right ? step : 0, e.Key == Key.Up ? -step : e.Key == Key.Down ? step : 0);
+                break;
+            }
+            case Key.Enter when _vm.CurvDraft.Count > 0: _vm.FinishCurvDraft(); break;
             case Key.Enter: _vm.CloseShape(); break;
             case Key.Back: _vm.BackspacePoint(); break;
+            case Key.Escape when _vm.CurvDraft.Count > 0: _vm.FinishCurvDraft(); break;
+            case Key.Escape when _vm.IsSelectMode || _vm.IsCurvatureMode: _vm.ClearSelection(); break;
             case Key.Escape: _vm.CancelDrawing(); break;
             case Key.Tab when ctrl: _vm.CycleTab((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1); break;
             case Key.W when ctrl: _vm.CloseTab(null); break;
             case Key.Tab: _vm.SkipStep(); break;
-            case Key.Delete: if (!_vm.DeleteSelectedStroke()) return; break;
+            case Key.Delete:
+                if (!(_vm.IsSelectMode ? _vm.DeleteSelection() : _vm.IsCurvatureMode && _vm.CurvPoint >= 0 ? _vm.DeleteCurvPoint() : _vm.DeleteSelectedStroke())) return;
+                break;
             case Key.Z when ctrl && (Keyboard.Modifiers & ModifierKeys.Shift) != 0: _vm.RedoStep(); break;
             case Key.Z when ctrl: _vm.UndoStep(); break;
             case Key.Y when ctrl: _vm.RedoStep(); break;
@@ -514,6 +744,7 @@ public partial class AnnotateView : UserControl
 
     private void OnKeyUp(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.X) { _xDown = false; e.Handled = true; return; }
         if (e.Key != Key.Space) return;
         _space = false;
         if (!_panning) SetHand(false);
@@ -521,14 +752,27 @@ public partial class AnnotateView : UserControl
     }
 
     // ------------------------------------------------------------------ painting
+    /// <summary>The whole picture: the regions and strokes (only when they change), then what follows the mouse.</summary>
     private void Draw()
     {
+        DrawScene();
+        DrawLive();
+    }
+
+    private static Color Accent => ThemeService.AccentColor;
+
+    private void DrawScene()
+    {
         Overlay.Children.Clear();
-        if (_vm?.Image is not { } img) return;
-        Overlay.Width = img.PixelWidth;
-        Overlay.Height = img.PixelHeight;
+        if (_vm?.Image is not { } img) { Live.Children.Clear(); return; }
+        Overlay.Width = Live.Width = img.PixelWidth;
+        Overlay.Height = Live.Height = img.PixelHeight;
         double px = 1 / _zoom;   // one screen pixel in picture units
-        if (!_space && !_panning) Overlay.Cursor = _vm.AdjustReference && _vm.IsArtboard ? Cursors.SizeAll : _vm.Tool is "entry" or "exit" ? Cursors.Cross : Cursors.None;
+        if (!_space && !_panning)
+            Overlay.Cursor = _vm.AdjustReference && _vm.IsArtboard ? Cursors.SizeAll
+                : _vm.IsSelectMode ? Cursors.Arrow
+                : _vm.IsCurvatureMode ? Cursors.Pen
+                : _vm.Tool is "entry" or "exit" ? Cursors.Cross : Cursors.None;
 
         foreach (var s in _vm.Ann.Segments)
         {
@@ -563,25 +807,32 @@ public partial class AnnotateView : UserControl
                 IsHitTestVisible = false,
             });
         }
-        // the selected stroke (Ctrl + click): its outline, anchors and handles, like a path selected in Illustrator
+        var accent = ThemeService.AccentColor;
+        var ab = new SolidColorBrush(accent);
+        // the stroke picked for editing (Ctrl + click, or the Curvature tool): its outline and points
         if (_vm.SelectedStroke is { } sel)
         {
-            var accent = ThemeService.AccentColor;
-            var ab = new SolidColorBrush(accent);
             Overlay.Children.Add(new Shapes.Path { Data = StrokeGeometry.ForSegment(sel), Stroke = ab, StrokeThickness = 1.5 * px, IsHitTestVisible = false });
             if (sel.Fit is { Count: > 0 } fit)
             {
-                var spine = new PathGeometry();
-                var fig = new PathFigure { StartPoint = new Point(fit[0][0], fit[0][1]) };
-                foreach (var c0 in fit) fig.Segments.Add(new BezierSegment(new Point(c0[2], c0[3]), new Point(c0[4], c0[5]), new Point(c0[6], c0[7]), true));
-                spine.Figures.Add(fig);
-                Overlay.Children.Add(new Shapes.Path { Data = spine, Stroke = ab, StrokeThickness = 1 * px, IsHitTestVisible = false });
+                Overlay.Children.Add(new Shapes.Path { Data = Spine(fit), Stroke = ab, StrokeThickness = 1 * px, IsHitTestVisible = false });
+                bool curv = _vm.IsCurvatureMode;
                 for (int k = 0; k <= fit.Count; k++)
                 {
                     var a = AnnotateViewModel.AnchorOf(fit, k);
-                    if (k < fit.Count) Handle(a, new Point(fit[k][2], fit[k][3]));
-                    if (k > 0) Handle(a, new Point(fit[k - 1][4], fit[k - 1][5]));
-                    Square(a.X, a.Y, 3.5 * px, Colors.White, accent, px);
+                    if (!curv)
+                    {
+                        if (k < fit.Count) Handle(a, new Point(fit[k][2], fit[k][3]));
+                        if (k > 0) Handle(a, new Point(fit[k - 1][4], fit[k - 1][5]));
+                        Square(a.X, a.Y, 3.5 * px, Colors.White, accent, px);
+                    }
+                    else
+                    {
+                        // Curvature: smooth points round, corners square; the point in hand filled
+                        var fill = k == _vm.CurvPoint ? accent : Colors.White;
+                        if (AnnotateViewModel.IsCorner(fit, k)) Square(a.X, a.Y, 3.5 * px, fill, accent, px);
+                        else Dot(a.X, a.Y, 3.8 * px, fill, px * 0.75, accent);
+                    }
                 }
                 void Handle(Point a, Point h)
                 {
@@ -591,21 +842,62 @@ public partial class AnnotateView : UserControl
                 }
             }
         }
+        // the Selection tool: each picked drawing outlined, and one box with its eight handles
+        if (_vm.IsSelectMode && _vm.HasSelection)
+        {
+            foreach (var s in _vm.Selection)
+                Overlay.Children.Add(new Shapes.Path { Data = AnnotateViewModel.ShapeOf(s), Stroke = ab, StrokeThickness = 1.2 * px, IsHitTestVisible = false });
+            var b = _vm.SelectionBounds();
+            if (!b.IsEmpty)
+            {
+                var box = new Shapes.Rectangle { Width = b.Width, Height = b.Height, Stroke = ab, StrokeThickness = 1 * px, IsHitTestVisible = false };
+                Canvas.SetLeft(box, b.X); Canvas.SetTop(box, b.Y);
+                Overlay.Children.Add(box);
+                foreach (var hx in new[] { 0, 0.5, 1 })
+                    foreach (var hy in new[] { 0, 0.5, 1 })
+                        if (!(hx == 0.5 && hy == 0.5)) Square(b.X + b.Width * hx, b.Y + b.Height * hy, 3.5 * px, Colors.White, accent, px);
+            }
+        }
+    }
+
+    private static PathGeometry Spine(List<double[]> fit)
+    {
+        var g = new PathGeometry();
+        var fig = new PathFigure { StartPoint = new Point(fit[0][0], fit[0][1]) };
+        foreach (var c0 in fit) fig.Segments.Add(new BezierSegment(new Point(c0[2], c0[3]), new Point(c0[4], c0[5]), new Point(c0[6], c0[7]), true));
+        g.Figures.Add(fig);
+        return g;
+    }
+
+    /// <summary>What follows the mouse, drawn alone on its own layer (cheap at every move).</summary>
+    private void DrawLive()
+    {
+        Live.Children.Clear();
+        _livePath = null;
+        _sweep = null;
+        if (_vm?.Image == null) return;
+        double px = 1 / _zoom;
+        var target = Live.Children;
+
+        // the stroke being drawn: exactly where the hand goes; new points are added to it as they come (OnLiveStroke)
         if (_vm.CurrentStroke.Count > 0)
         {
             var c = _vm.BrushColor;
-            Overlay.Children.Add(new Shapes.Path
+            _sweep = new StrokeGeometry.NibSweep(_vm.Tip);
+            foreach (var q in _vm.CurrentStroke) _sweep.Add(q);
+            _livePath = new Shapes.Path
             {
-                Data = StrokeGeometry.Build(_vm.CurrentStroke, _vm.Tip, _vm.Fidelity),
+                Data = _sweep.Group,
                 Fill = new SolidColorBrush(Color.FromArgb((byte)(255 * Math.Clamp(_vm.Tip.Opacity, 0.05, 1)), c.R, c.G, c.B)),
                 IsHitTestVisible = false,
-            });
+            };
+            target.Add(_livePath);
         }
-        if (_vm.IsBrushTool && _mouse is { } nib && !_stroking && !_space && !_vm.AdjustReference)
+        if (_vm.IsDrawBrush && _mouse is { } nib && !_stroking && !_space && !_vm.AdjustReference)
         {
             // the nib under the mouse: its size, angle and roundness before drawing
             var c = _vm.BrushColor;
-            Overlay.Children.Add(new Shapes.Path
+            target.Add(new Shapes.Path
             {
                 Data = StrokeGeometry.Build([[nib.X, nib.Y, 0]], _vm.Tip),
                 Stroke = new SolidColorBrush(c), StrokeThickness = 1.2 * px,
@@ -614,19 +906,63 @@ public partial class AnnotateView : UserControl
             });
         }
 
+        // Curvature: the new stroke so far, bending to the mouse
+        if (_vm.IsCurvatureMode && _vm.CurvDraft.Count > 0)
+        {
+            var pts = _vm.CurvDraft.ToList();
+            if (_mouse is { } mm && !_vm.IsOnFirstCurvPoint(mm, 8 * px)) pts.Add((mm, false));
+            var fit = AnnotateViewModel.CurvFit(pts);
+            var c = _vm.BrushColor;
+            if (fit.Count > 0)
+            {
+                target.Add(new Shapes.Path
+                {
+                    Data = StrokeGeometry.Build(StrokeGeometry.SampleFit(fit), _vm.Tip),
+                    Fill = new SolidColorBrush(Color.FromArgb(150, c.R, c.G, c.B)), IsHitTestVisible = false,
+                });
+                target.Add(new Shapes.Path { Data = Spine(fit), Stroke = new SolidColorBrush(Accent), StrokeThickness = 1 * px, IsHitTestVisible = false });
+            }
+            for (int i = 0; i < _vm.CurvDraft.Count; i++)
+            {
+                var (pt, corner) = _vm.CurvDraft[i];
+                if (corner) Square(pt.X, pt.Y, 3.5 * px, Colors.White, Accent, px, target);
+                else Dot(pt.X, pt.Y, 3.8 * px, i == 0 ? Accent : Colors.White, px * 0.75, Accent, target);
+            }
+        }
+
+        // Selection tool: the marquee, and the turning arrow outside a corner
+        if (_vm.IsSelectMode && _tMode == "marquee" && _tMoved && _mouse is { } mq)
+        {
+            var r = new Rect(_tFrom, mq);
+            var box = new Shapes.Rectangle
+            {
+                Width = r.Width, Height = r.Height, Stroke = new SolidColorBrush(Accent), StrokeThickness = 1 * px,
+                StrokeDashArray = new DoubleCollection { 4, 3 }, Fill = new SolidColorBrush(Color.FromArgb(24, Accent.R, Accent.G, Accent.B)), IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(box, r.X); Canvas.SetTop(box, r.Y);
+            target.Add(box);
+        }
+        if (_vm.IsSelectMode && _rotateCursor && _mouse is { } rc && _tMode == null)
+        {
+            var t = new TextBlock { Text = "\u21BB", FontSize = 20 * px, Foreground = Brushes.White, IsHitTestVisible = false,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 3, ShadowDepth = 0, Opacity = 1, Color = Colors.Black } };
+            Canvas.SetLeft(t, rc.X - 8 * px); Canvas.SetTop(t, rc.Y - 13 * px);
+            target.Add(t);
+        }
+
         if (_vm.Drawing.Count > 0)
         {
             var c = _vm.Tool == "exclude" ? AnnotateViewModel.ExcludeColor : AnnotateViewModel.ChipColor(_vm.Active);
             var brush = new SolidColorBrush(c);
             // the path so far (curves where anchors have handles), then a thin line to the mouse
             var line = AnnotateViewModel.Flatten(_vm.Drawing, closed: false);
-            Overlay.Children.Add(new Shapes.Polyline
+            target.Add(new Shapes.Polyline
             {
                 Points = new PointCollection(line), Stroke = brush, StrokeThickness = 2 * px,
                 StrokeLineJoin = PenLineJoin.Round, IsHitTestVisible = false,
             });
             if (_mouse is { } m && _dragNode == null)
-                Overlay.Children.Add(new Shapes.Line
+                target.Add(new Shapes.Line
                 {
                     X1 = _vm.Drawing[^1].A.X, Y1 = _vm.Drawing[^1].A.Y, X2 = m.X, Y2 = m.Y,
                     Stroke = brush, StrokeThickness = 1 * px, StrokeDashArray = new DoubleCollection { 4, 3 }, IsHitTestVisible = false,
@@ -638,13 +974,13 @@ public partial class AnnotateView : UserControl
                 foreach (var h in new[] { n.In, n.Out })
                 {
                     if (h is not { } hp) continue;
-                    Overlay.Children.Add(new Shapes.Line { X1 = n.A.X, Y1 = n.A.Y, X2 = hp.X, Y2 = hp.Y, Stroke = brush, StrokeThickness = 1 * px, IsHitTestVisible = false });
-                    Dot(hp.X, hp.Y, 3 * px, c, px, c);
+                    target.Add(new Shapes.Line { X1 = n.A.X, Y1 = n.A.Y, X2 = hp.X, Y2 = hp.Y, Stroke = brush, StrokeThickness = 1 * px, IsHitTestVisible = false });
+                    Dot(hp.X, hp.Y, 3 * px, c, px, c, target);
                 }
-                Square(n.A.X, n.A.Y, (i == 0 ? 5 : 3.5) * px, i == 0 ? Colors.White : c, c, px);
+                Square(n.A.X, n.A.Y, (i == 0 ? 5 : 3.5) * px, i == 0 ? Colors.White : c, c, px, target);
             }
         }
-        if (_vm.IsPenTool && _mouse is { } pm && !_space && !_panning && _dragNode == null && !_vm.AdjustReference) PenCursor(pm, px);
+        if (_vm.IsDrawPen && _mouse is { } pm && !_space && !_panning && _dragNode == null && !_vm.AdjustReference) PenCursor(pm, px);
         if (_angleFlash != null && DateTime.Now < _angleFlashUntil && _mouse is { } am)
         {
             var label = new Border
@@ -655,7 +991,7 @@ public partial class AnnotateView : UserControl
             };
             Canvas.SetLeft(label, am.X + 16 * px);
             Canvas.SetTop(label, am.Y + 12 * px);
-            Overlay.Children.Add(label);
+            target.Add(label);
         }
     }
 
@@ -670,11 +1006,11 @@ public partial class AnnotateView : UserControl
         t.Children.Add(new ScaleTransform(px * 0.95, px * 0.95));   // about 23 screen pixels at any zoom
         t.Children.Add(new TranslateTransform(m.X, m.Y));
         g.Transform = t;
-        Overlay.Children.Add(new Shapes.Path { Data = g, Fill = Brushes.Black, Stroke = Brushes.White, StrokeThickness = 1.1 * px, IsHitTestVisible = false });
+        Live.Children.Add(new Shapes.Path { Data = g, Fill = Brushes.Black, Stroke = Brushes.White, StrokeThickness = 1.1 * px, IsHitTestVisible = false });
     }
 
     /// <summary>An anchor: a small square, like Illustrator.</summary>
-    private void Square(double x, double y, double r, Color fill, Color stroke, double px)
+    private void Square(double x, double y, double r, Color fill, Color stroke, double px, UIElementCollection? into = null)
     {
         var e = new Shapes.Rectangle
         {
@@ -683,10 +1019,10 @@ public partial class AnnotateView : UserControl
         };
         Canvas.SetLeft(e, x - r);
         Canvas.SetTop(e, y - r);
-        Overlay.Children.Add(e);
+        (into ?? Overlay.Children).Add(e);
     }
 
-    private void Dot(double x, double y, double r, Color fill, double px, Color? stroke = null)
+    private void Dot(double x, double y, double r, Color fill, double px, Color? stroke = null, UIElementCollection? into = null)
     {
         var e = new Shapes.Ellipse
         {
@@ -698,6 +1034,6 @@ public partial class AnnotateView : UserControl
         };
         Canvas.SetLeft(e, x - r);
         Canvas.SetTop(e, y - r);
-        Overlay.Children.Add(e);
+        (into ?? Overlay.Children).Add(e);
     }
 }

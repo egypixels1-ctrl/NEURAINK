@@ -53,6 +53,8 @@ public sealed class Segment
     [JsonPropertyName("raw")] public List<double[]>? Raw { get; set; }
     /// <summary>Brush strokes: the StreamLine used while drawing (0 … 100 %).</summary>
     [JsonPropertyName("streamline")] public int StreamLine { get; set; }
+    /// <summary>Brush strokes: built point by point with the Curvature tool (not a movement of the hand).</summary>
+    [JsonPropertyName("built")] public bool Built { get; set; }
     /// <summary>Brush strokes: edited after drawing (anchors or a redrawn part).</summary>
     [JsonPropertyName("edited")] public bool Edited { get; set; }
     /// <summary>Brush strokes: the smoothing used (0 accurate … 4 smooth); the raw points stay as drawn.</summary>

@@ -408,6 +408,9 @@ public sealed partial class AnnotateViewModel : ObservableObject
         HasItem = true;
         NothingLeft = false;
         SelectedOrder = 0;
+        Selection.Clear();
+        CurvDraft.Clear();
+        CurvPoint = -1;
         CurrentStroke.Clear();
         if (fresh)
         {
@@ -544,6 +547,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     partial void OnToolChanged(string value)
     {
         foreach (var t in Tools) t.IsActive = t.Key == value;
+        NotifyModeButtons();
         if (_restoring) { OnPropertyChanged(nameof(IsBrushTool)); OnPropertyChanged(nameof(IsPenTool)); UpdateHint(); return; }
         CurrentStroke.Clear();
         SelectedOrder = 0;
@@ -742,7 +746,10 @@ public sealed partial class AnnotateViewModel : ObservableObject
     }
     public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
     public int Fidelity { get => _main.Settings.Fidelity; set { _main.Settings.Fidelity = Math.Clamp(value, 0, 4); OnPropertyChanged(); _main.SaveSettings(); Redraw?.Invoke(); } }
-    /// <summary>StreamLine, like Procreate: the stroke follows the hand a little behind, without its shakes (0 … 100 %).</summary>
+    /// <summary>
+    /// Smoothing, like the Illustrator Paintbrush: the stroke follows the hand exactly while drawing, and is smoothed the moment
+    /// the hand leaves the paper (0 … 100 %). (Kept under its first name, StreamLine, in the settings and the data.)
+    /// </summary>
     public double StreamLine { get => _main.Settings.StreamLine; set { _main.Settings.StreamLine = (int)Math.Clamp(Math.Round(value), 0, 100); OnPropertyChanged(); SaveBrush(); } }
     public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
     public double PictureOpacity
@@ -983,8 +990,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
         }
     }
 
-    [RelayCommand] private void UsePen() => Tool = "letter";
-    [RelayCommand] private void UseBrush() => Tool = "brush";
+    [RelayCommand] private void UsePen() { EditMode = ""; Tool = "letter"; NotifyModeButtons(); }
+    [RelayCommand] private void UseBrush() { EditMode = ""; Tool = "brush"; NotifyModeButtons(); }
 
     [RelayCommand]
     private void ToggleOriginal()
@@ -1024,6 +1031,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
         _restoring = false;
         if (CurrentTab != null) { CurrentTab.IsDirty = true; CurrentTab.Text = Ann.Text; }
         if (SelectedStroke == null) SelectedOrder = 0;
+        Selection.Clear();
+        CurvPoint = -1;
         Refresh();
     }
 
@@ -1041,68 +1050,59 @@ public sealed partial class AnnotateViewModel : ObservableObject
         Restore(_redo.Pop());
     }
 
-    // ---- StreamLine (live smoothing while drawing): the drawn point follows the hand like a weight on a short string
-    private readonly List<double[]> _rawStroke = [];
-    private double _sx, _sy;
+    /// <summary>A point was added to the stroke being drawn: only it is drawn (the rest of the picture stays as it is).</summary>
+    public event Action? LiveStroke;
 
     public void BeginStroke(Point p, double pressure)
     {
         if (Item == null || !IsBrushTool) return;
         Checkpoint();
         CurrentStroke.Clear();
-        _rawStroke.Clear();
         _strokeClock.Restart();
-        _sx = p.X; _sy = p.Y;
-        double[] first = [Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), 0];
-        CurrentStroke.Add(first);
-        _rawStroke.Add(first);
+        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), 0]);
         Redraw?.Invoke();
     }
 
-    /// <summary>How much of the way to the hand the drawn point moves at each step (1 = no StreamLine).</summary>
-    private double Follow => 1 - 0.9 * Math.Clamp(StreamLine / 100.0, 0, 1);
-
+    /// <summary>The stroke follows the hand exactly while drawing (no lag); it is smoothed when the hand leaves the paper.</summary>
     public void ExtendStroke(Point p, double pressure, double minStep)
     {
         if (CurrentStroke.Count == 0) return;
-        long ms = _strokeClock.ElapsedMilliseconds;
-        var lastRaw = _rawStroke[^1];
-        if (Math.Abs(p.X - lastRaw[0]) + Math.Abs(p.Y - lastRaw[1]) >= minStep * 0.5)
-            _rawStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), ms]);
-        double f = Follow;
-        _sx += (p.X - _sx) * f;
-        _sy += (p.Y - _sy) * f;
         var last = CurrentStroke[^1];
-        if (Math.Abs(_sx - last[0]) + Math.Abs(_sy - last[1]) < minStep) return;
-        CurrentStroke.Add([Math.Round(_sx, 2), Math.Round(_sy, 2), Math.Round(pressure, 3), ms]);
-        Redraw?.Invoke();
+        if (Math.Abs(p.X - last[0]) + Math.Abs(p.Y - last[1]) < minStep) return;
+        CurrentStroke.Add([Math.Round(p.X, 2), Math.Round(p.Y, 2), Math.Round(pressure, 3), _strokeClock.ElapsedMilliseconds]);
+        LiveStroke?.Invoke();
     }
 
-    /// <summary>The stroke is kept for the active letter (or as an ornament); then, unless Shift is held, the next letter.</summary>
+    /// <summary>
+    /// The stroke is kept for the active letter (or as an ornament), smoothed at once like the Illustrator Paintbrush.
+    /// The letter stays the same: a right click moves on to the next one.
+    /// </summary>
     public void EndStroke(bool stay, double zoom = 1)
     {
         if (CurrentStroke.Count == 0) return;
-        // StreamLine catches up with the hand where it left the paper (like Procreate)
-        var end = _rawStroke[^1];
-        double gap = Math.Sqrt((end[0] - _sx) * (end[0] - _sx) + (end[1] - _sy) * (end[1] - _sy));
-        if (StreamLine > 0 && gap > 0.5)
-        {
-            int steps = Math.Clamp((int)(gap / 2), 1, 12);
-            for (int k = 1; k <= steps; k++)
-            {
-                double t = k / (double)steps;
-                CurrentStroke.Add([Math.Round(_sx + (end[0] - _sx) * t, 2), Math.Round(_sy + (end[1] - _sy) * t, 2), end[2], end[3]]);
-            }
-        }
         var pts = CurrentStroke.ToList();
-        var raw = StreamLine > 0 ? _rawStroke.ToList() : null;
         CurrentStroke.Clear();
-        _rawStroke.Clear();
+        double smoothing = Math.Clamp(StreamLine / 100.0, 0, 1);
         // a part of the selected stroke drawn again (like Illustrator "Edit Selected Paths")
         if (SelectedStroke is { } sel && RedrawPart(sel, pts, 12 / Math.Max(0.05, zoom), zoom)) { Refresh(); return; }
-        // the stroke is rebuilt from a smooth spline (see StrokeGeometry.Fit)
         List<double[]>? fit = null;
-        try { fit = pts.Count >= 2 ? StrokeGeometry.Fit(pts, zoom, Fidelity) : null; } catch { fit = null; }
+        try { fit = pts.Count >= 2 ? StrokeGeometry.Fit(pts, zoom, Fidelity, smoothing) : null; } catch { fit = null; }
+        var made = NewStroke();
+        if (made != null)
+        {
+            made.Fidelity = Fidelity;
+            made.StreamLine = (int)StreamLine;
+            made.Stroke = pts;
+            made.Fit = fit;
+            Ann.Segments.Add(made);
+        }
+        SelectedOrder = 0;
+        Refresh();
+    }
+
+    /// <summary>A new stroke for the active letter (its tashkeel, or an ornament), with the brush in use; not yet added.</summary>
+    private Segment? NewStroke()
+    {
         var c = ChipAt(Active);
         Segment? made = null;
         if (Tool == "ornament")
@@ -1111,27 +1111,28 @@ public sealed partial class AnnotateViewModel : ObservableObject
             made = new Segment { Kind = "diacritic", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form) };
         else if (c != null)
             made = new Segment { Kind = "stroke", Chip = Active, Letter = c.Ch, Form = Arabic.FormKey(c.Form) };
-        if (made != null)
+        if (made == null) return null;
+        made.Order = ++_strokeOrder;
+        made.Brush = Tip.Copy();
+        return made;
+    }
+
+    /// <summary>Right click: the next letter not done yet (Shift + right click: the letter before).</summary>
+    public void StepLetter(int dir)
+    {
+        if (Item == null || Chips.Count == 0) return;
+        if (dir < 0) { Active = (Active - 1 + Chips.Count) % Chips.Count; Refresh(); ShowLetterToast(); return; }
+        for (int k = 1; k <= Chips.Count; k++)
         {
-            made.Order = ++_strokeOrder;
-            made.Brush = Tip.Copy();
-            made.Fidelity = Fidelity;
-            made.StreamLine = StreamLine > 0 ? (int)StreamLine : 0;
-            made.Stroke = pts;
-            made.Raw = raw;
-            made.Fit = fit;
-            Ann.Segments.Add(made);
+            int i = (Active + k) % Chips.Count;
+            if (!IsDone(i)) { Active = i; Refresh(); ShowLetterToast(); return; }
         }
-        SelectedOrder = 0;
-        if (Tool == "brush" && !stay && AutoNextLetter && Chips.Count > 0)
-        {
-            for (int k = 1; k <= Chips.Count; k++)
-            {
-                int i = (Active + k) % Chips.Count;
-                if (!IsDone(i)) { Active = i; break; }
-            }
-        }
-        Refresh();
+        ShowToast(Loc.T("Ann.AllDone"));
+    }
+
+    private void ShowLetterToast()
+    {
+        if (ChipAt(Active) is { } c) ShowToast(Loc.F("Ann.NowLetter", c.Ch, Loc.T("Form." + Arabic.FormKey(c.Form))));
     }
 
     // ------------------------------------------------------------------ editing a stroke after drawing (like Illustrator)
@@ -1318,7 +1319,9 @@ public sealed partial class AnnotateViewModel : ObservableObject
 
     public void SetToolByKey(int n)
     {
-        if (n >= 1 && n <= Tools.Count) Tool = Tools[n - 1].Key;
+        if (n < 1 || n > Tools.Count) return;
+        EditMode = "";
+        Tool = Tools[n - 1].Key;
     }
 
     private async void ShowToast(string text)

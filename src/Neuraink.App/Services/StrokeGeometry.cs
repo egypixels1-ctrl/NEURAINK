@@ -74,58 +74,75 @@ public static class StrokeGeometry
     public static Geometry Build(IReadOnlyList<double[]> raw, BrushTip tip, int fidelity = 0)
     {
         var pts = fidelity > 0 ? Smooth(raw, fidelity) : raw;
-        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
-        if (pts.Count == 0) { group.Freeze(); return group; }
-        double a = tip.Angle * Math.PI / 180, cos = Math.Cos(a), sin = Math.Sin(a);
-        double r = Math.Clamp(tip.Roundness, 0.02, 1);
+        var sweep = new NibSweep(tip);
+        foreach (var p in pts) sweep.Add(p);
+        sweep.Group.Freeze();
+        return sweep.Group;
+    }
 
-        Point P(int i) => new(pts[i][0], pts[i][1]);
-        double Scale(int i) => pts[i].Length > 2 && pts[i][2] > 0 ? Math.Clamp(pts[i][2] * 2, 0.25, 2) : 1;
+    /// <summary>
+    /// The nib swept point by point. While drawing, only the new points are added (the stroke so far is not built again),
+    /// so the brush keeps up with the hand however long the stroke is.
+    /// </summary>
+    public sealed class NibSweep
+    {
+        private readonly BrushTip _tip;
+        private readonly double _cos, _sin, _r;
+        private Point? _last;
+        private double _lastScale;
+        public GeometryGroup Group { get; } = new() { FillRule = FillRule.Nonzero };
+        public int Count { get; private set; }
 
-        // nib ellipse at a point (Y axis of the picture points down: the angle turns counter-clockwise on screen)
-        void Stamp(Point c, double s)
+        public NibSweep(BrushTip tip)
         {
-            var e = new EllipseGeometry(c, tip.Size * s / 2, tip.Size * s * r / 2);
-            e.Transform = new RotateTransform(-tip.Angle, c.X, c.Y);
-            group.Children.Add(e);
+            _tip = tip;
+            double a = tip.Angle * Math.PI / 180;
+            _cos = Math.Cos(a); _sin = Math.Sin(a);
+            _r = Math.Clamp(tip.Roundness, 0.02, 1);
+        }
+
+        public void Add(double[] p)
+        {
+            Count++;
+            var c = new Point(p[0], p[1]);
+            double s = p.Length > 2 && p[2] > 0 ? Math.Clamp(p[2] * 2, 0.25, 2) : 1;
+            if (_last is { } p0)
+            {
+                var d = c - p0;
+                if (d.Length < 1e-6) return;
+                var n = new Vector(-d.Y, d.X);
+                n.Normalize();
+                Vector o0 = Support(n, _lastScale), o1 = Support(n, s);
+                // every piece must turn the same way as the ellipses: with the non-zero rule, opposite turns cancel out (holes)
+                Point[] q = [p0 + o0, c + o1, c - o1, p0 - o0];
+                if (Math.Sign(SignedArea(q)) != EllipseTurn) Array.Reverse(q);
+                var quad = new StreamGeometry();
+                using (var g = quad.Open())
+                {
+                    g.BeginFigure(q[0], true, true);
+                    g.PolyLineTo(new[] { q[1], q[2], q[3] }, true, false);
+                }
+                quad.Freeze();
+                Group.Children.Add(quad);
+            }
+            // nib ellipse at the point (Y axis of the picture points down: the angle turns counter-clockwise on screen)
+            var e = new EllipseGeometry(c, _tip.Size * s / 2, _tip.Size * s * _r / 2) { Transform = new RotateTransform(-_tip.Angle, c.X, c.Y) };
+            e.Freeze();
+            Group.Children.Add(e);
+            _last = c;
+            _lastScale = s;
         }
 
         // the point of the nib ellipse farthest along the normal n (support point), relative to the centre
-        Vector Support(Vector n, double s)
+        private Vector Support(Vector n, double s)
         {
-            double A = tip.Size * s / 2, B = tip.Size * s * r / 2;
-            // into the ellipse's own axes
-            double nx = n.X * cos - n.Y * sin, ny = n.X * sin + n.Y * cos;
+            double A = _tip.Size * s / 2, B = _tip.Size * s * _r / 2;
+            double nx = n.X * _cos - n.Y * _sin, ny = n.X * _sin + n.Y * _cos;
             double ux = A * nx, uy = B * ny, len = Math.Sqrt(ux * ux + uy * uy);
             if (len < 1e-9) return new Vector(0, 0);
             double lx = A * ux / len, ly = B * uy / len;
-            // back to the picture
-            return new Vector(lx * cos + ly * sin, -lx * sin + ly * cos);
+            return new Vector(lx * _cos + ly * _sin, -lx * _sin + ly * _cos);
         }
-
-        Stamp(P(0), Scale(0));
-        for (int i = 1; i < pts.Count; i++)
-        {
-            Point p0 = P(i - 1), p1 = P(i);
-            var d = p1 - p0;
-            if (d.Length < 1e-6) continue;
-            var n = new Vector(-d.Y, d.X);
-            n.Normalize();
-            Vector o0 = Support(n, Scale(i - 1)), o1 = Support(n, Scale(i));
-            // every piece must turn the same way as the ellipses: with the non-zero rule, opposite turns cancel out (holes)
-            Point[] q = [p0 + o0, p1 + o1, p1 - o1, p0 - o0];
-            if (Math.Sign(SignedArea(q)) != EllipseTurn) Array.Reverse(q);
-            var quad = new StreamGeometry();
-            using (var g = quad.Open())
-            {
-                g.BeginFigure(q[0], true, true);
-                g.PolyLineTo(new[] { q[1], q[2], q[3] }, true, false);
-            }
-            group.Children.Add(quad);
-            Stamp(p1, Scale(i));
-        }
-        group.Freeze();
-        return group;
     }
 
     private static double SignedArea(IReadOnlyList<Point> p)
@@ -173,14 +190,20 @@ public static class StrokeGeometry
     private static readonly double[] MaxDeviation = [3, 5, 8, 10, 12];
 
     /// <summary>The stroke as Bézier curves: per curve x0, y0, x1, y1, x2, y2, x3, y3, pressure start, pressure end.</summary>
-    public static List<double[]> Fit(IReadOnlyList<double[]> raw, double zoom, int fidelity)
+    /// <param name="smoothing">
+    /// The smoothing applied when the hand leaves the paper, 0 … 1 (like the Illustrator Paintbrush): the path is evened out
+    /// (a Gaussian up to 10 screen pixels wide, cusps kept) and fitted with fewer, longer curves. Nothing lags while drawing.
+    /// </param>
+    public static List<double[]> Fit(IReadOnlyList<double[]> raw, double zoom, int fidelity, double smoothing = 0)
     {
         var res = new List<double[]>();
         var q = Resample(raw, 1.0);
         if (q.Count < 3) return res;
         zoom = Math.Max(0.05, zoom);
         int f = Math.Clamp(fidelity, 0, KnotSpacing.Length - 1);
-        double spacing = KnotSpacing[f] / zoom, tol = MaxDeviation[f] / zoom;
+        smoothing = Math.Clamp(smoothing, 0, 1);
+        double spacing = KnotSpacing[f] / zoom * (1 + smoothing), tol = MaxDeviation[f] / zoom * (1 + 1.5 * smoothing);
+        double sigma = smoothing * 10 / zoom;
         int w = Math.Max(3, (int)Math.Round(6 / zoom));
 
         var cuts = new List<int> { 0 };
@@ -190,7 +213,7 @@ public static class StrokeGeometry
         {
             int a = cuts[c], b = cuts[c + 1];
             if (b - a < 2) continue;
-            res.AddRange(FitPiece(q.GetRange(a, b - a + 1), spacing, tol));
+            res.AddRange(FitPiece(Even(q.GetRange(a, b - a + 1), sigma), spacing, tol));
         }
         return res;
     }
@@ -250,6 +273,30 @@ public static class StrokeGeometry
     }
 
     private static double Sq(double v) => v * v;
+
+    /// <summary>Gaussian smoothing of a piece (1 px spacing); its two ends stay where they were drawn.</summary>
+    private static List<double[]> Even(List<double[]> q, double sigma)
+    {
+        int n = q.Count;
+        if (sigma <= 0.3 || n < 5) return q;
+        int r = (int)Math.Ceiling(3 * sigma);
+        var w = new double[2 * r + 1];
+        for (int j = -r; j <= r; j++) w[j + r] = Math.Exp(-0.5 * j * j / (sigma * sigma));
+        var outp = new List<double[]>(n) { q[0] };
+        for (int i = 1; i < n - 1; i++)
+        {
+            int rr = Math.Min(r, Math.Min(i, n - 1 - i));
+            double sx = 0, sy = 0, sp = 0, sw = 0;
+            for (int j = -rr; j <= rr; j++)
+            {
+                var v = q[i + j]; double ww = w[j + r];
+                sx += ww * v[0]; sy += ww * v[1]; sp += ww * v[2]; sw += ww;
+            }
+            outp.Add([sx / sw, sy / sw, sp / sw]);
+        }
+        outp.Add(q[^1]);
+        return outp;
+    }
 
     private static double[] Knots(int nseg)
     {
@@ -432,8 +479,34 @@ public static class StrokeGeometry
     }
 
     /// <summary>The shape of a saved stroke: its fitted curves when it has them, else its raw points smoothed.</summary>
-    public static Geometry ForSegment(Segment s) =>
-        s.Fit is { Count: > 0 } f ? Build(SampleFit(f), s.Brush!, 0) : Build(s.Stroke!, s.Brush!, s.Fidelity);
+    /// <summary>
+    /// The shape of a stroke, kept until the stroke changes (its curves, points or brush): the picture is drawn again at every
+    /// move of the mouse, and building every stroke again each time made the brush lag.
+    /// </summary>
+    public static Geometry ForSegment(Segment s)
+    {
+        var key = KeyOf(s);
+        if (Cache.TryGetValue(s, out var hit) && hit.Key == key) return hit.Geometry;
+        var g = s.Fit is { Count: > 0 } f ? Build(SampleFit(f), s.Brush!, 0) : Build(s.Stroke!, s.Brush!, s.Fidelity);
+        Cache.AddOrUpdate(s, new Cached(key, g));
+        return g;
+    }
+
+    private sealed record Cached(string Key, Geometry Geometry);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Segment, Cached> Cache = new();
+
+    private static string KeyOf(Segment s)
+    {
+        double sum = 0, wsum = 0;
+        int n = 0, i = 0;
+        foreach (var list in new[] { s.Fit, s.Fit is { Count: > 0 } ? null : s.Stroke })
+        {
+            if (list == null) continue;
+            foreach (var v in list) { foreach (var x in v) { sum += x; wsum += x * (++i % 7 + 1); } n++; }
+        }
+        var t = s.Brush;
+        return string.Create(CultureInfo.InvariantCulture, $"{n}|{sum:R}|{wsum:R}|{t?.Size}|{t?.Angle}|{t?.Roundness}|{s.Fidelity}");
+    }
 
     /// <summary>All the strokes of a letter as one filled outline (overlaps merged).</summary>
     public static Geometry Outline(IEnumerable<Segment> strokes)
