@@ -123,6 +123,48 @@ public partial class App : Application
                     a.CurvPoint = 1;
                 }, DispatcherPriority.ContextIdle);
                 break;
+            case "scissors":
+                // a stroke cut in two with the Scissors: the pieces go to two letters, the cut marked
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    var a = vm.Annotate;
+                    if (a.Image is not { } img) return;
+                    double w = img.PixelWidth, h = img.PixelHeight;
+                    a.SetToolByKey(6);
+                    a.PictureOpacity = 45;
+                    a.BrushSize = Math.Max(8, w / 22);
+                    a.BeginStroke(new Point(w * 0.85, h * 0.30), 0);
+                    for (int k = 1; k <= 40; k++) a.ExtendStroke(new Point(w * (0.85 - 0.6 * k / 40), h * (0.30 + 0.4 * Math.Sin(k / 40.0 * Math.PI))), 0, 0.5);
+                    a.EndStroke(stay: true, zoom: 0.5);
+                    a.UseScissors();
+                    a.CutAt(new Point(w * 0.55, h * (0.30 + 0.4 * Math.Sin(0.5 * Math.PI))), 30);
+                }, DispatcherPriority.ContextIdle);
+                break;
+            case "rulers":
+                // rulers on, two guides
+                vm.Settings.ShowRulers = true;
+                vm.Go(vm.Annotate);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    DemoBrush(vm.Annotate);
+                    if (vm.Annotate.Image is not { } img) return;
+                    vm.Annotate.AddGuide('h', img.PixelHeight * 0.7);
+                    vm.Annotate.AddGuide('v', img.PixelWidth * 0.5);
+                    vm.Annotate.UseSelect();
+                }, DispatcherPriority.ContextIdle);
+                break;
+            case "library-move":
+                // a piece copied to a new style folder, the undo bar; the style folder shown can be switched
+                Dispatcher.BeginInvoke(() =>
+                {
+                    vm.Go(vm.LibraryPage);
+                    var it = vm.Library.Items.FirstOrDefault();
+                    if (it == null) return;
+                    Directory.CreateDirectory(Path.Combine(vm.Database.LibraryRoot, "thuluth"));
+                    vm.MovePieces([it], "thuluth", copy: true);
+                }, DispatcherPriority.ContextIdle);
+                break;
             case "compact":
                 // the menu folded to its icons and the side panel folded: the picture takes the room
                 vm.NavCollapsed = true;
@@ -141,7 +183,7 @@ public partial class App : Application
                     var pic = Path.Combine(dir, "سامي (2).png");
                     File.Copy(src, pic, true);
                     vm.Go(vm.LibraryPage);
-                    await vm.LibraryPage.AddFiles([pic]);
+                    await vm.AddToLibrary(false, [pic], vm.Library.Folder, moveFiles: false, confirm: false);
                     foreach (var t in vm.LibraryPage.Tiles.Skip(1).Take(2)) t.IsSelected = true;
                 }, DispatcherPriority.ContextIdle);
                 break;

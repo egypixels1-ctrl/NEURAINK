@@ -52,6 +52,11 @@ public sealed class AppSettings
     public bool SidePanelCollapsed { get; set; }
     /// <summary>The main menu folded to its icons.</summary>
     public bool NavCollapsed { get; set; }
+    /// <summary>Knowledge Studio: rulers (Ctrl+R), guides shown (Ctrl+;), guides locked (Ctrl+Alt+;), snapping to them.</summary>
+    public bool ShowRulers { get; set; }
+    public bool ShowGuides { get; set; } = true;
+    public bool GuidesLocked { get; set; }
+    public bool SnapToGuides { get; set; } = true;
     /// <summary>Segmentation: the pieces open in tabs (ids), and the tab in front.</summary>
     public List<int> OpenTabs { get; set; } = [];
     public int ActiveTab { get; set; }

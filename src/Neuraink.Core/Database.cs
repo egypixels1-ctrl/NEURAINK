@@ -55,6 +55,46 @@ public sealed class NeurainkDatabase
                 new JsonSerializerOptions { WriteIndented = true }));
     }
 
+    /// <summary>
+    /// Older layout: a style folder (with its report.csv) next to Library\ — e.g. "diwani" made before the database existed —
+    /// is moved into Library\. Returns the folders moved. Segmentations and letters keep their ids, so nothing else changes.
+    /// </summary>
+    public List<string> MoveLegacyStyles()
+    {
+        var moved = new List<string>();
+        if (!Exists) return moved;
+        try
+        {
+            Directory.CreateDirectory(LibraryRoot);
+            foreach (var d in Directory.EnumerateDirectories(Root).ToList())
+            {
+                var name = Path.GetFileName(d);
+                if (Folders.Contains(name) || !File.Exists(Path.Combine(d, "report.csv"))) continue;
+                var to = Path.Combine(LibraryRoot, name);
+                if (Directory.Exists(to)) continue;
+                Directory.Move(d, to);
+                moved.Add(name);
+            }
+        }
+        catch { }
+        return moved;
+    }
+
+    /// <summary>Every id in use in the database: the rows of every style, the artboards aside (they count from 900001).</summary>
+    public HashSet<int> UsedIds()
+    {
+        var ids = new HashSet<int>();
+        foreach (var st in Styles()) foreach (var id in LibraryEditor.Ids(Path.Combine(LibraryRoot, st))) ids.Add(id);
+        try
+        {
+            if (Directory.Exists(AnnotationsFolder))
+                foreach (var f in Directory.EnumerateFiles(AnnotationsFolder, "*.json"))
+                    if (int.TryParse(Path.GetFileNameWithoutExtension(f), out var id)) ids.Add(id);
+        }
+        catch { }
+        return ids;
+    }
+
     /// <summary>The script styles of the library: the folders of Library\ that contain a report.csv.</summary>
     public List<string> Styles()
     {

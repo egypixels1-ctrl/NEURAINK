@@ -42,7 +42,7 @@ public sealed partial class DashboardViewModel(MainViewModel main) : ObservableO
     [ObservableProperty] private bool _noLetters = true;
     public ObservableCollection<CoverageRow> Coverage { get; } = [];
     public ObservableCollection<RoadmapStep> Roadmap { get; } = [];
-    public string Subtitle => Loc.F("Dash.Sub", main.Settings.Style);
+    public string Subtitle => Loc.F("Dash.Sub", MainViewModel.StyleDisplay(main.CurrentStyle));
 
     public void Refresh()
     {
@@ -127,6 +127,8 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     public void Reload()
     {
+        OnPropertyChanged(nameof(Styles));
+        OnPropertyChanged(nameof(SelectedStyle));
         var lib = _main.Library;
         LibraryMissing = !lib.Found;
         var q = (Search ?? "").Trim();
@@ -204,39 +206,72 @@ public sealed partial class LibraryViewModel : ObservableObject
         _main.DeletePieces(list.Select(t => t.Item).ToList());
     }
 
-    /// <summary>Adds pictures (pure black on white, the file name is the text); the window opens on the Desktop.</summary>
+    /// <summary>Add pieces: a whole folder or some files, to a style folder of Library\ (see MainViewModel.AddToLibrary).</summary>
     [RelayCommand]
     private async Task Add()
     {
-        if (IsBusy) return;
-        var d = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = Loc.T("Board.Pictures") + "|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.tif;*.tiff",
-            Multiselect = true,
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-        };
-        if (d.ShowDialog(Application.Current?.MainWindow) != true || d.FileNames.Length == 0) return;
-        await AddFiles(d.FileNames);
+        int how = Views.ChoiceWindow.Ask(Loc.T("Lib.AddHow"), [Loc.T("Lib.AddFolder"), Loc.T("Lib.AddFiles"), Loc.T("Common.Cancel")], accent: 0, cancel: 2);
+        if (how is 0 or 1) await _main.AddToLibrary(folder: how == 0);
     }
 
-    /// <summary>Pictures dropped on the library, or picked in the window.</summary>
-    public async Task AddFiles(IReadOnlyList<string> files)
+    /// <summary>Pictures dropped on the library.</summary>
+    public Task AddFiles(IReadOnlyList<string> files) => files.Count == 0 ? Task.CompletedTask : _main.AddToLibrary(false, files);
+
+    /// <summary>After adding: the pieces added last first, nothing filtered.</summary>
+    public void ShowAddedLast() { Search = ""; Filter = "all"; SortIndex = 3; Reload(); }
+
+    // ---- the style folders (Library\diwani, Library\thuluth …): which one is shown
+    public List<StyleOption> Styles => _main.StyleFolders.Select(f => new StyleOption(f, MainViewModel.StyleDisplay(f))).ToList();
+    public StyleOption? SelectedStyle
     {
-        if (IsBusy || files.Count == 0) return;
-        IsBusy = true;
-        BusyText = Loc.F("Lib.Adding", 0, files.Count);
-        try
-        {
-            var progress = new Progress<int>(n => BusyText = Loc.F("Lib.Adding", n, files.Count));
-            int added = await _main.AddPieces(files, progress);
-            if (added > 0) { Search = ""; Filter = "all"; SortIndex = 3; Reload(); }
-        }
-        finally { IsBusy = false; }
+        get => Styles.FirstOrDefault(o => o.Folder == _main.CurrentStyle);
+        set { if (value != null && value.Folder != _main.CurrentStyle) _main.SwitchStyle(value.Folder); }
     }
+
+    /// <summary>Move to › / Copy to › on the ticked pieces (or this one); "New style folder…" makes one first.</summary>
+    public void MoveTo(LibraryTile? tile, string? style, bool copy)
+    {
+        var list = tile != null && !tile.IsSelected ? new List<LibraryTile> { tile } : Tiles.Where(t => t.IsSelected).ToList();
+        if (list.Count == 0) return;
+        style ??= _main.NewStyleFolder();
+        if (string.IsNullOrWhiteSpace(style)) return;
+        _main.MovePieces(list.Select(t => t.Item).ToList(), style, copy);
+    }
+
+    // ---- "Moved 12 pieces to Thuluth · Undo" for a few seconds
+    [ObservableProperty] private string _undoText = "";
+    private Action? _undo;
+    private System.Windows.Threading.DispatcherTimer? _undoTimer;
+
+    public void OfferUndo(string text, Action undo)
+    {
+        _undo = undo;
+        UndoText = text;
+        _undoTimer?.Stop();
+        _undoTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        _undoTimer.Tick += (_, _) => { _undoTimer?.Stop(); UndoText = ""; _undo = null; };
+        _undoTimer.Start();
+    }
+
+    [RelayCommand]
+    private void Undo()
+    {
+        var u = _undo;
+        _undo = null;
+        UndoText = "";
+        _undoTimer?.Stop();
+        u?.Invoke();
+    }
+
     [RelayCommand] private void SetFilter(string? f) => Filter = f ?? "all";
 }
 
 // ====================================================================== Letters
+public sealed record StyleOption(string Folder, string Name)
+{
+    public override string ToString() => Name;
+}
+
 public sealed partial class LetterCard : ObservableObject
 {
     public required LetterGroup Group { get; init; }

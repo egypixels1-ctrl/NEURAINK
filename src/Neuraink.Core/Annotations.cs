@@ -53,6 +53,14 @@ public sealed class Segment
     [JsonPropertyName("raw")] public List<double[]>? Raw { get; set; }
     /// <summary>Brush strokes: the StreamLine used while drawing (0 … 100 %).</summary>
     [JsonPropertyName("streamline")] public int StreamLine { get; set; }
+    /// <summary>
+    /// Brush strokes cut with the Scissors / Knife: the stroke they come from (its order when it was drawn whole) and where the
+    /// piece starts along it (in pixels). The pieces of one stroke go to the letters in this order.
+    /// </summary>
+    [JsonPropertyName("cut_from")] public int CutFrom { get; set; }
+    [JsonPropertyName("cut_pos")] public double CutPos { get; set; }
+    /// <summary>The letter was chosen by the user (right click): the automatic assignment leaves it as it is.</summary>
+    [JsonPropertyName("manual")] public bool Manual { get; set; }
     /// <summary>Brush strokes: built point by point with the Curvature tool (not a movement of the hand).</summary>
     [JsonPropertyName("built")] public bool Built { get; set; }
     /// <summary>Brush strokes: edited after drawing (anchors or a redrawn part).</summary>
@@ -75,6 +83,9 @@ public sealed class Annotation
     [JsonPropertyName("text")] public string Text { get; set; } = "";
     [JsonPropertyName("state")] public string State { get; set; } = "";       // done | partial | rejected
     [JsonPropertyName("segments")] public List<Segment> Segments { get; set; } = [];
+    /// <summary>Guides dragged from the rulers (like Illustrator): horizontal ones (y) and vertical ones (x), in pixels.</summary>
+    [JsonPropertyName("guides_h")] public List<double> GuidesH { get; set; } = [];
+    [JsonPropertyName("guides_v")] public List<double> GuidesV { get; set; } = [];
     [JsonPropertyName("savedAt")] public string SavedAt { get; set; } = "";
     /// <summary>Data format of this file (see <see cref="DataVersion.Schema"/>).</summary>
     [JsonPropertyName("schema")] public int Schema { get; set; }

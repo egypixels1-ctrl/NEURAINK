@@ -17,6 +17,14 @@ public sealed class LibraryItem
     /// <summary>library (a piece of the triage library) or artboard (written directly on a white artboard).</summary>
     public string Source { get; init; } = "library";
     public bool IsArtboard => Source == "artboard";
+    /// <summary>The library folder the piece belongs to (Library\&lt;style&gt;); its file paths are relative to it.</summary>
+    public string Folder { get; set; } = "";
+    /// <summary>The style of the piece: the name of its library folder (diwani, thuluth …).</summary>
+    public string Style => Path.GetFileName(Folder.TrimEnd('\\', '/'));
+    /// <summary>A file of the piece as a full path (artboard paths are full already).</summary>
+    public string PathOf(string relative) =>
+        string.IsNullOrEmpty(relative) ? "" : Path.IsPathRooted(relative) ? relative
+            : Path.Combine(Folder, relative.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
     public int Words => Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
 }
 
@@ -42,6 +50,7 @@ public sealed class Library
             try { items = Parse(System.IO.File.ReadAllText(report, Encoding.UTF8)); }
             catch { Found = false; }
         }
+        foreach (var i in items) i.Folder = Folder;
         var freq = items.GroupBy(i => i.Text).ToDictionary(g => g.Key, g => g.Count());
         foreach (var i in items) i.Freq = freq[i.Text];
         Items = items;
@@ -131,9 +140,53 @@ public static class LibraryEditor
         Directory.CreateDirectory(folder);
         var rows = ReadRows(folder);
         if (rows.Count == 0) rows.Add([.. Header]);
-        var head = rows[0].Select(h => h.Trim().TrimStart('\uFEFF')).ToArray();
+        var head = rows[0].Select(h => h.Trim().TrimStart('\uFEFF')).ToList();
+        // a column the report does not have yet (e.g. "hash") is added at its end
+        foreach (var k in values.Keys.Where(k => !head.Contains(k)).ToList())
+        {
+            head.Add(k);
+            for (int i = 1; i < rows.Count; i++) rows[i] = [.. rows[i], .. Enumerable.Repeat("", head.Count - rows[i].Length)];
+        }
+        rows[0] = [.. head];
         rows.Add(head.Select(h => values.TryGetValue(h, out var v) ? v : "").ToArray());
         Write(folder, rows);
+    }
+
+    /// <summary>The row of a piece by column name (null when the report has no such id).</summary>
+    public static Dictionary<string, string>? GetRow(string folder, int id)
+    {
+        var rows = ReadRows(folder);
+        if (rows.Count == 0) return null;
+        var head = rows[0].Select(h => h.Trim().TrimStart('\uFEFF')).ToArray();
+        int col = Array.IndexOf(head, "id");
+        if (col < 0) return null;
+        var r = rows.Skip(1).FirstOrDefault(x => col < x.Length && int.TryParse(x[col], out var v) && v == id);
+        if (r == null) return null;
+        var d = new Dictionary<string, string>();
+        for (int i = 0; i < head.Length; i++) d[head[i]] = i < r.Length ? r[i] : "";
+        return d;
+    }
+
+    /// <summary>Every id of a report (usable or not).</summary>
+    public static IEnumerable<int> Ids(string folder)
+    {
+        var rows = ReadRows(folder);
+        if (rows.Count == 0) yield break;
+        int col = Array.FindIndex(rows[0], h => h.Trim().TrimStart('\uFEFF') == "id");
+        if (col < 0) yield break;
+        foreach (var r in rows.Skip(1))
+            if (col < r.Length && int.TryParse(r[col], out var v)) yield return v;
+    }
+
+    /// <summary>The values of one column (e.g. the content hashes of the pieces added by NEURAINK).</summary>
+    public static IEnumerable<string> Column(string folder, string name)
+    {
+        var rows = ReadRows(folder);
+        if (rows.Count == 0) yield break;
+        int col = Array.FindIndex(rows[0], h => h.Trim().TrimStart('\uFEFF') == name);
+        if (col < 0) yield break;
+        foreach (var r in rows.Skip(1))
+            if (col < r.Length && r[col].Length > 0) yield return r[col];
     }
 
     /// <summary>Removes the rows of these ids; returns how many were removed.</summary>

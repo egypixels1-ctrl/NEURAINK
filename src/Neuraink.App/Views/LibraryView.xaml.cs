@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Neuraink.App.Services;
 using Neuraink.App.ViewModels;
 
 namespace Neuraink.App.Views;
@@ -29,7 +30,7 @@ public partial class LibraryView : UserControl
     private async void OnDrop(object sender, DragEventArgs e)
     {
         if (Vm == null || e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
-        var pics = files.Where(f => new[] { ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff" }.Contains(Path.GetExtension(f).ToLowerInvariant())).ToList();
+        var pics = files.Where(PieceImporter.IsPicture).ToList();
         if (pics.Count > 0) await Vm.AddFiles(pics);
     }
 
@@ -46,5 +47,25 @@ public partial class LibraryView : UserControl
 
     private void OnMenuOpenNewTab(object sender, RoutedEventArgs e) { if (TileOf(sender) is { } t) Vm?.OpenNewTabCommand.Execute(t); }
     private void OnMenuSelect(object sender, RoutedEventArgs e) { if (TileOf(sender) is { } t) t.IsSelected = !t.IsSelected; }
+    /// <summary>Move to › / Copy to ›: the style folders of Library\, then "New style folder…".</summary>
+    private void OnStylesMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem parent || e.OriginalSource != parent || Vm == null || MainViewModel.Current is not { } m) return;
+        var tile = TileOf(parent);
+        bool copy = (parent.Tag as string) == "copy";
+        parent.Items.Clear();
+        foreach (var st in m.StyleFolders)
+        {
+            var it = new MenuItem { Header = MainViewModel.StyleDisplay(st), IsEnabled = copy || st != m.CurrentStyle || tile?.Item.IsArtboard == true };
+            var folder = st;
+            it.Click += (_, _) => Vm.MoveTo(tile, folder, copy);
+            parent.Items.Add(it);
+        }
+        parent.Items.Add(new Separator());
+        var add = new MenuItem { Header = Loc.T("Lib.NewStyleItem") };
+        add.Click += (_, _) => Vm.MoveTo(tile, null, copy);
+        parent.Items.Add(add);
+    }
+
     private void OnMenuDelete(object sender, RoutedEventArgs e) { if (TileOf(sender) is { } t) Vm?.DeleteCommand.Execute(t); }
 }

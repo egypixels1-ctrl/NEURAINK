@@ -101,11 +101,19 @@
                                     </Border>
                                     <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"
                                                FlowDirection="LeftToRight" />
-                                    <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" Margin="0,0,12,0" />
+                                    <Grid Width="16" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}" />
+                                        <Path Data="{Binding Icon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Stretch="Uniform" Height="17"
+                                              Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                    </Grid>
                                     <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 </DockPanel>
                                 <!-- folded: the icon only -->
-                                <TextBlock x:Name="IconOnly" Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="16" HorizontalAlignment="Center" Margin="0,9" Visibility="Collapsed" />
+                                <Grid x:Name="IconOnly" HorizontalAlignment="Center" Margin="0,9" Visibility="Collapsed">
+                                    <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="16" Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}" />
+                                    <Path Data="{Binding Icon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Stretch="Uniform" Height="19"
+                                          Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                </Grid>
                             </Grid>
                             <DataTemplate.Triggers>
                                 <DataTrigger Binding="{Binding IsFirst}" Value="True">
@@ -124,5 +132,14 @@
 
         <!-- page -->
         <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="24,22,28,20" Focusable="False" />
+        <!-- a long job (adding a folder of pieces …) -->
+        <Border Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,26" Padding="16,9" CornerRadius="10"
+                Background="#F21C1C1E" BorderBrush="{DynamicResource BrandBrush}" BorderThickness="1"
+                Visibility="{Binding BusyText, Converter={StaticResource NonEmptyToVis}}">
+            <StackPanel Orientation="Horizontal">
+                <ProgressBar IsIndeterminate="True" Width="80" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <TextBlock Text="{Binding BusyText}" Foreground="White" VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

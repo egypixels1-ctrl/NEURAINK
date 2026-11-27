@@ -27,6 +27,9 @@ public sealed partial class AnnotateViewModel
     {
         OnPropertyChanged(nameof(IsSelectMode)); OnPropertyChanged(nameof(IsCurvatureMode));
         OnPropertyChanged(nameof(IsDrawPen)); OnPropertyChanged(nameof(IsDrawBrush));
+        OnPropertyChanged(nameof(IsScissorsMode)); OnPropertyChanged(nameof(IsKnifeMode));
+        LastCut = null;
+        if (value != "select") ReferenceSelected = false;
         CurvDraft.Clear();
         CurvPoint = -1;
         if (value != "") Drawing.Clear();
@@ -58,7 +61,23 @@ public sealed partial class AnnotateViewModel
 
     // ================================================================== Selection tool (V)
     public List<Segment> Selection { get; } = [];
-    public bool HasSelection => Selection.Count > 0;
+    public bool HasSelection => Selection.Count > 0 || ReferenceSelected;
+
+    /// <summary>The reference picture of an artboard, taken in hand with the Selection tool (move, scale, Backspace).</summary>
+    public bool ReferenceSelected { get; set; }
+
+    public Rect ReferenceRect => Reference is { } r && _board != null
+        ? new Rect(_board.RefX, _board.RefY, r.PixelWidth * _board.RefScale, r.PixelHeight * _board.RefScale) : Rect.Empty;
+
+    /// <summary>A click on the reference picture (drawings above it are taken first).</summary>
+    public bool HitReference(Point p) => IsArtboard && Reference != null && ReferenceRect.Contains(p);
+
+    public void SelectReference(bool add)
+    {
+        if (!add) { Selection.Clear(); SelectedOrder = 0; }
+        ReferenceSelected = true;
+        Redraw?.Invoke();
+    }
 
     private static bool IsShape(Segment s) => s.Brush == null && s.Points.Count >= 3;
 
@@ -93,6 +112,7 @@ public sealed partial class AnnotateViewModel
     {
         var r = Rect.Empty;
         foreach (var s in Selection) r.Union(ShapeOf(s).Bounds);
+        if (ReferenceSelected && !ReferenceRect.IsEmpty) r.Union(ReferenceRect);
         return r;
     }
 
@@ -100,7 +120,7 @@ public sealed partial class AnnotateViewModel
     public Segment? SelectAt(Point p, double tol, bool add)
     {
         var hit = HitAny(p, tol);
-        if (!add) { if (hit == null || !Selection.Contains(hit)) Selection.Clear(); }
+        if (!add) { if (hit == null || !Selection.Contains(hit)) { Selection.Clear(); ReferenceSelected = false; } }
         if (hit != null)
         {
             if (add && Selection.Contains(hit)) Selection.Remove(hit);
@@ -114,18 +134,20 @@ public sealed partial class AnnotateViewModel
     /// <summary>A marquee: everything it touches is picked.</summary>
     public void SelectIn(Rect r, bool add)
     {
-        if (!add) Selection.Clear();
+        if (!add) { Selection.Clear(); ReferenceSelected = false; }
         foreach (var s in Ann.Segments.Where(x => IsStrokeKind(x) || IsShape(x)))
             if (!Selection.Contains(s) && ShapeOf(s).Bounds.IntersectsWith(r)) Selection.Add(s);
+        if (!ReferenceRect.IsEmpty && r.Contains(ReferenceRect)) ReferenceSelected = true;   // the picture only when wholly inside
         if (Selection.FirstOrDefault() is { } first) FollowLetter(first);
         Redraw?.Invoke();
     }
 
-    public void ClearSelection() { Selection.Clear(); SelectedOrder = 0; CurvPoint = -1; Redraw?.Invoke(); }
+    public void ClearSelection() { Selection.Clear(); ReferenceSelected = false; SelectedOrder = 0; CurvPoint = -1; Redraw?.Invoke(); }
 
     /// <summary>A drawing picked: its letter becomes the active one (what is drawn next goes to it).</summary>
     private void FollowLetter(Segment s)
     {
+        if (s.Brush != null) AdoptBrushOf(s);
         if (s.Chip < 0 || s.Chip >= Chips.Count || s.Kind is "ornament" or "exclude" || s.Chip == Active) return;
         Active = s.Chip;
         Refresh();
@@ -134,11 +156,14 @@ public sealed partial class AnnotateViewModel
     private List<Segment>? _base;
 
     /// <summary>Start of a move / scale / turn: the picked drawings as they are now (undo comes back here).</summary>
+    private (double X, double Y, double S)? _refBase;
+
     public void BeginTransform()
     {
-        if (Selection.Count == 0) return;
+        if (!HasSelection) return;
         Checkpoint();
         _base = Selection.Select(Clone).ToList();
+        _refBase = ReferenceSelected && _board != null ? (_board.RefX, _board.RefY, _board.RefScale) : null;
     }
 
     /// <summary>The picked drawings, as they were at the start, moved by a matrix (move, scale, turn).</summary>
@@ -146,6 +171,14 @@ public sealed partial class AnnotateViewModel
     {
         if (_base == null) return;
         for (int i = 0; i < Selection.Count && i < _base.Count; i++) CopyTransformed(_base[i], Selection[i], m);
+        if (_refBase is { } rb && _board != null)
+        {
+            // the picture moves and scales with the rest (it does not turn)
+            var tl = m.Transform(new Point(rb.X, rb.Y));
+            _board.RefScale = Math.Clamp(rb.S * Math.Sqrt(Math.Abs(m.M11 * m.M22 - m.M12 * m.M21)), 0.02, 40);
+            _board.RefX = tl.X; _board.RefY = tl.Y;
+            NotifyReference();
+        }
         Redraw?.Invoke();
     }
 
@@ -153,6 +186,7 @@ public sealed partial class AnnotateViewModel
     {
         if (_base == null) return;
         _base = null;
+        if (_refBase != null) { _refBase = null; SaveBoard(now: true); }
         foreach (var s in Selection.Where(IsStrokeKind)) s.Edited = true;
         Refresh();
     }
@@ -160,7 +194,7 @@ public sealed partial class AnnotateViewModel
     /// <summary>Arrow keys: a step of 1 pixel (Shift: 10).</summary>
     public void Nudge(double dx, double dy)
     {
-        if (Selection.Count == 0) return;
+        if (!HasSelection) return;
         BeginTransform();
         ApplyTransform(new Matrix(1, 0, 0, 1, dx, dy));
         EndTransform();
@@ -168,10 +202,18 @@ public sealed partial class AnnotateViewModel
 
     public bool DeleteSelection()
     {
-        if (Selection.Count == 0) return false;
+        if (!HasSelection) return false;
         Checkpoint();
         foreach (var s in Selection) Ann.Segments.Remove(s);
         Selection.Clear();
+        if (ReferenceSelected && _board != null)
+        {
+            _board.Reference = null;
+            Reference = null;
+            ReferenceSelected = false;
+            SaveBoard(now: true);
+            NotifyReference();
+        }
         Refresh();
         return true;
     }

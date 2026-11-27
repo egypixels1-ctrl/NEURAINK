@@ -246,3 +246,34 @@ public class TracerTests
             Assert.Contains(l, c => Math.Abs(c[0] - cx) < 1.6 && Math.Abs(c[1] - cy) < 1.6);
     }
 }
+
+public class LibraryStylesTests
+{
+    [Fact]
+    public void LegacyStyleMovesIntoLibraryAndColumnsGrow()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "neuraink-db-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var db = new NeurainkDatabase(root);
+            db.CreateMissing();
+            var legacy = Path.Combine(root, "diwani");
+            LibraryEditor.AddRow(legacy, new Dictionary<string, string> { ["id"] = "5", ["text"] = "محمد", ["status"] = "clean", ["clean_png"] = "clean_png/00005.png" });
+            Assert.Equal(["diwani"], db.MoveLegacyStyles());
+            Assert.False(Directory.Exists(legacy));
+            var lib = Path.Combine(db.LibraryRoot, "diwani");
+            Assert.Equal(["diwani"], db.Styles());
+            // a new column (hash) is added to the report; older rows get it empty
+            LibraryEditor.AddRow(lib, new Dictionary<string, string> { ["id"] = "6", ["text"] = "علي", ["status"] = "clean", ["clean_png"] = "clean_png/00006.png", ["hash"] = "abc" });
+            Assert.Equal(["abc"], LibraryEditor.Column(lib, "hash"));
+            Assert.Equal("علي", LibraryEditor.GetRow(lib, 6)!["text"]);
+            Assert.Equal("", LibraryEditor.GetRow(lib, 5)!["hash"]);
+            var l = new Library(lib);
+            Assert.Equal(2, l.Items.Count);
+            Assert.Equal("diwani", l.Get(5)!.Style);
+            Assert.EndsWith(Path.Combine("diwani", "clean_png", "00005.png"), l.Get(5)!.PathOf(l.Get(5)!.Png));
+            Assert.Equal(new HashSet<int> { 5, 6 }, db.UsedIds());
+        }
+        finally { try { Directory.Delete(root, true); } catch { } }
+    }
+}

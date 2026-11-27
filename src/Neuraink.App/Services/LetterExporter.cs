@@ -42,7 +42,10 @@ public static class LetterExporter
                 Style = style, Tier = item.Tier, Chip = first.Chip, FromStrokes = true, SourceKind = "brush", Split = ann.Split, Origin = item.IsArtboard ? "artboard" : "library",
                 Strokes = group.Concat(ann.Segments.Where(d => d.Kind == "diacritic" && d.Chip == first.Chip)).OrderBy(d => d.Order).ToList(),
                 BBox = [(int)Math.Floor(box.X), (int)Math.Floor(box.Y), (int)Math.Ceiling(box.Right), (int)Math.Ceiling(box.Bottom)],
-                Entry = body?.Entry, Exit = body?.Exit, ImageSize = [w, h],
+                // where the letter joins its neighbours: marked on its body, or found where the stroke was cut (Scissors / Knife)
+                Entry = body?.Entry ?? group.OrderBy(x => x.Order).Select(x => x.Entry).FirstOrDefault(e => e != null),
+                Exit = body?.Exit ?? group.OrderByDescending(x => x.Order).Select(x => x.Exit).FirstOrDefault(e => e != null),
+                ImageSize = [w, h],
             });
             count++;
         }

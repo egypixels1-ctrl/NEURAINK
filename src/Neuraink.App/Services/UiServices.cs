@@ -134,9 +134,10 @@ public static class Dialogs
     public static bool Confirm(string msg) =>
         MessageBox.Show(Owner!, msg, "NEURAINK", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 
-    public static string? PickFolder(string? initial = null)
+    public static string? PickFolder(string? initial = null, string? title = null)
     {
         var d = new Microsoft.Win32.OpenFolderDialog();
+        if (!string.IsNullOrEmpty(title)) d.Title = title;
         if (!string.IsNullOrEmpty(initial) && Directory.Exists(initial)) d.InitialDirectory = initial;
         return d.ShowDialog(Owner) == true ? d.FolderName : null;
     }

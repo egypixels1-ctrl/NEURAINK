@@ -52,7 +52,8 @@ public sealed partial class BrushItem : ObservableObject
 public sealed record BrushEdit(BrushTip Tip, bool Delete);
 
 /// <summary>The work saved for undo: the regions and strokes, the open pen path, the letter, the tool and the text.</summary>
-public sealed record Snapshot(string Segments, List<PenNode> Drawing, int Active, string Tool, string Text);
+public sealed record Snapshot(string Segments, List<PenNode> Drawing, int Active, string Tool, string Text, string Brushes = "", int BrushIndex = 0,
+    string? RefFile = null, double RefX = 0, double RefY = 0, double RefScale = 1, List<double>? GuidesH = null, List<double>? GuidesV = null);
 
 /// <summary>
 /// A piece open in a tab (like Illustrator documents): each tab keeps its own work, undo history, zoom and scroll while
@@ -427,12 +428,12 @@ public sealed partial class AnnotateViewModel : ObservableObject
         FileInfo = item.File;
         Drawing.Clear();
         if (!fresh) Drawing.AddRange(tab.Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }));
-        Image = Images.Load(_main.FullPath(item.Png));
+        Image = Images.Load(item.PathOf(item.Png));
         _board = item.IsArtboard ? _main.Artboards.Get(item.Id) : null;
         Reference = _board?.Reference is { } rp ? Images.Load(rp) : null;
         AdjustReference = false;
         NotifyReference();
-        Original = _main.Settings.ShowOriginal ? Images.Load(_main.FullPath(item.Thumb), 320) : null;
+        Original = _main.Settings.ShowOriginal ? Images.Load(item.PathOf(item.Thumb), 320) : null;
         OnPropertyChanged(nameof(ShowOriginal));
         OnPropertyChanged(nameof(IsTestSet));
         _settingText = true;
@@ -744,13 +745,43 @@ public sealed partial class AnnotateViewModel : ObservableObject
             return b[Math.Clamp(_main.Settings.BrushIndex, 0, b.Count - 1)];
         }
     }
-    public double BrushSize { get => Tip.Size; set { Tip.Size = Math.Clamp(Math.Round(value, 1), 1, 400); OnPropertyChanged(); SaveBrush(); } }
-    public int Fidelity { get => _main.Settings.Fidelity; set { _main.Settings.Fidelity = Math.Clamp(value, 0, 4); OnPropertyChanged(); _main.SaveSettings(); Redraw?.Invoke(); } }
+    public double BrushSize
+    {
+        get => Tip.Size;
+        set
+        {
+            var v = Math.Clamp(Math.Round(value, 1), 1, 400);
+            if (Math.Abs(v - Tip.Size) < 0.01) return;
+            BrushCheckpoint();
+            Tip.Size = v; OnPropertyChanged(); SaveBrush();
+        }
+    }
+    public int Fidelity
+    {
+        get => _main.Settings.Fidelity;
+        set
+        {
+            var v = Math.Clamp(value, 0, 4);
+            if (v == _main.Settings.Fidelity) return;
+            BrushCheckpoint();
+            _main.Settings.Fidelity = v; OnPropertyChanged(); _main.SaveSettings(); Redraw?.Invoke();
+        }
+    }
     /// <summary>
     /// Smoothing, like the Illustrator Paintbrush: the stroke follows the hand exactly while drawing, and is smoothed the moment
     /// the hand leaves the paper (0 … 100 %). (Kept under its first name, StreamLine, in the settings and the data.)
     /// </summary>
-    public double StreamLine { get => _main.Settings.StreamLine; set { _main.Settings.StreamLine = (int)Math.Clamp(Math.Round(value), 0, 100); OnPropertyChanged(); SaveBrush(); } }
+    public double StreamLine
+    {
+        get => _main.Settings.StreamLine;
+        set
+        {
+            var v = (int)Math.Clamp(Math.Round(value), 0, 100);
+            if (v == _main.Settings.StreamLine) return;
+            BrushCheckpoint();
+            _main.Settings.StreamLine = v; OnPropertyChanged(); SaveBrush();
+        }
+    }
     public bool AutoNextLetter { get => _main.Settings.AutoNextLetter; set { _main.Settings.AutoNextLetter = value; OnPropertyChanged(); _main.SaveSettings(); } }
     public double PictureOpacity
     {
@@ -895,6 +926,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     private void SelectBrush(BrushItem? b)
     {
         if (b == null) return;
+        if (b.Index != _main.Settings.BrushIndex) BrushCheckpoint();
         _main.Settings.BrushIndex = b.Index;
         foreach (var x in BrushList) x.IsSelected = x == b;
         OnPropertyChanged(nameof(BrushSize));
@@ -912,6 +944,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
         if (b == null || EditBrushDialog == null) return;
         var r = EditBrushDialog(b.Tip.Copy(), false);
         if (r == null) return;
+        _lastBrushStep = DateTime.MinValue;
+        BrushCheckpoint();
         var list = _main.Settings.Brushes;
         if (r.Delete && list.Count > 1)
         {
@@ -936,6 +970,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
         var fresh = new BrushTip { Name = Loc.F("Brushes.NewName", n), Size = Tip.Size, Angle = 45, Roundness = BrushTip.DefaultRoundness };
         var r = EditBrushDialog(fresh, true);
         if (r == null || r.Delete) return;
+        _lastBrushStep = DateTime.MinValue;
+        BrushCheckpoint();
         _main.Settings.Brushes.Add(r.Tip);
         _main.Settings.BrushIndex = _main.Settings.Brushes.Count - 1;
         _main.SaveSettings();
@@ -948,6 +984,8 @@ public sealed partial class AnnotateViewModel : ObservableObject
     private void DuplicateBrush(BrushItem? b)
     {
         if (b == null) return;
+        _lastBrushStep = DateTime.MinValue;
+        BrushCheckpoint();
         var c = b.Tip.Copy();
         c.Name += " 2";
         _main.Settings.Brushes.Insert(b.Index + 1, c);
@@ -959,6 +997,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     /// <summary>Alt + wheel: turns the brush (5° a notch, 1° with Shift); returns the new angle.</summary>
     public double RotateBrush(double degrees)
     {
+        BrushCheckpoint();
         var a = (Tip.Angle + degrees) % 180;
         if (a < 0) a += 180;
         Tip.Angle = Math.Round(a);
@@ -998,7 +1037,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     {
         _main.Settings.ShowOriginal = !_main.Settings.ShowOriginal;
         _main.SaveSettings();
-        if (_main.Settings.ShowOriginal && Original == null && Item != null) Original = Images.Load(_main.FullPath(Item.Thumb), 320);
+        if (_main.Settings.ShowOriginal && Original == null && Item != null) Original = Images.Load(Item.PathOf(Item.Thumb), 320);
         OnPropertyChanged(nameof(ShowOriginal));
     }
 
@@ -1008,16 +1047,95 @@ public sealed partial class AnnotateViewModel : ObservableObject
 
     private Snapshot Take() => new(
         System.Text.Json.JsonSerializer.Serialize(Ann.Segments, SnapJson),
-        Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }).ToList(), Active, Tool, Ann.Text);
+        Drawing.Select(d => new PenNode { A = d.A, In = d.In, Out = d.Out }).ToList(), Active, Tool, Ann.Text,
+        System.Text.Json.JsonSerializer.Serialize(_main.Settings.Brushes, SnapJson), _main.Settings.BrushIndex,
+        _board?.Reference, _board?.RefX ?? 0, _board?.RefY ?? 0, _board?.RefScale ?? 1, [.. Ann.GuidesH], [.. Ann.GuidesV]);
 
     /// <summary>Remembers the state before a change (Ctrl+Z goes back to it).</summary>
-    public void Checkpoint()
+    public void Checkpoint() => Checkpoint(dirty: true);
+
+    private void Checkpoint(bool dirty)
     {
-        if (CurrentTab != null) CurrentTab.IsDirty = true;
+        if (dirty && CurrentTab != null) CurrentTab.IsDirty = true;
         _undo.Push(Take());
         if (_undo.Count > 300) { var keep = _undo.Take(200).Reverse().ToList(); _undo.Clear(); foreach (var k in keep) _undo.Push(k); }
         _redo.Clear();
     }
+
+    /// <summary>A brush was changed back by Ctrl+Z / Ctrl+Y: what changed, shown by the mouse ("Angle 45°").</summary>
+    public event Action<string>? BrushReverted;
+
+    private DateTime _lastBrushStep;
+
+    /// <summary>
+    /// Before a change of the brush (size, angle, roundness, opacity, smoothing, another brush): a step for Ctrl+Z. Changes in
+    /// a quick run (ten notches of the wheel, a slider dragged) make one step.
+    /// </summary>
+    private void BrushCheckpoint()
+    {
+        if (Item != null && (DateTime.Now - _lastBrushStep).TotalMilliseconds > 900) Checkpoint(dirty: false);
+        _lastBrushStep = DateTime.Now;
+    }
+
+    private void RestoreBrushes(Snapshot s)
+    {
+        if (string.IsNullOrEmpty(s.Brushes)) return;
+        var now = System.Text.Json.JsonSerializer.Serialize(_main.Settings.Brushes, SnapJson);
+        if (now == s.Brushes && s.BrushIndex == _main.Settings.BrushIndex) return;
+        var before = Tip.Copy();
+        var list = System.Text.Json.JsonSerializer.Deserialize<List<BrushTip>>(s.Brushes, SnapJson);
+        if (list == null || list.Count == 0) return;
+        _main.Settings.Brushes = list;
+        _main.Settings.BrushIndex = Math.Clamp(s.BrushIndex, 0, list.Count - 1);
+        _main.SaveSettings();
+        LoadBrushes();
+        OnPropertyChanged(nameof(StreamLine)); OnPropertyChanged(nameof(Fidelity));
+        var t = Tip;
+        string what =
+            before.Name != t.Name || Math.Abs(before.Angle - t.Angle) > 0.01 && Math.Abs(before.Size - t.Size) > 0.01 ? $"{t.Name} · {t.Angle:0}° · {t.Size:0} px"
+            : Math.Abs(before.Angle - t.Angle) > 0.01 ? Loc.F("Brush.UndoAngle", t.Angle.ToString("0"))
+            : Math.Abs(before.Size - t.Size) > 0.01 ? Loc.F("Brush.UndoSize", t.Size.ToString("0"))
+            : Math.Abs(before.Roundness - t.Roundness) > 0.001 ? Loc.F("Brush.UndoRound", (t.Roundness * 100).ToString("0"))
+            : Math.Abs(before.Opacity - t.Opacity) > 0.001 ? Loc.F("Brush.UndoOpacity", (t.Opacity * 100).ToString("0"))
+            : $"{t.Name} · {t.Angle:0}° · {t.Size:0} px";
+        BrushReverted?.Invoke(what);
+    }
+
+    /// <summary>
+    /// A stroke taken in hand: the Brushes list picks the brush it was drawn with (same angle and roundness) and its size; if
+    /// none matches, a brush "Calligraphic" is made with its nib, put in the list by its angle.
+    /// </summary>
+    public void AdoptBrushOf(Segment s)
+    {
+        if (s.Brush is not { } nib) return;
+        var list = _main.Settings.Brushes;
+        int i = list.FindIndex(b => Math.Abs(b.Angle - nib.Angle) < 0.5 && Math.Abs(b.Roundness - nib.Roundness) < 0.005);
+        bool same = i >= 0 && i == _main.Settings.BrushIndex && Math.Abs(list[i].Size - nib.Size) < 0.05 && Math.Abs(list[i].Opacity - nib.Opacity) < 0.005;
+        if (same) return;
+        BrushCheckpoint();
+        if (i < 0)
+        {
+            var made = nib.Copy();
+            made.Name = "Calligraphic";
+            // its place: among the brushes by angle (the round brush first)
+            int at = list.FindIndex(b => b.Roundness < 0.9 && b.Angle > made.Angle);
+            if (at < 0) at = list.Count;
+            list.Insert(at, made);
+            i = at;
+        }
+        else
+        {
+            list[i].Size = nib.Size;
+            list[i].Opacity = nib.Opacity;
+        }
+        _main.Settings.BrushIndex = i;
+        _main.SaveSettings();
+        LoadBrushes();
+        BrushFollowed?.Invoke(BrushList.FirstOrDefault(b => b.IsSelected));
+    }
+
+    /// <summary>The Brushes list moved to another brush by itself (the list shows it).</summary>
+    public event Action<BrushItem?>? BrushFollowed;
 
     private void Restore(Snapshot s)
     {
@@ -1033,6 +1151,19 @@ public sealed partial class AnnotateViewModel : ObservableObject
         if (SelectedStroke == null) SelectedOrder = 0;
         Selection.Clear();
         CurvPoint = -1;
+        RestoreBrushes(s);
+        // the reference picture of an artboard as it was (moved, scaled or removed)
+        if (_board != null && (_board.Reference != s.RefFile || _board.RefX != s.RefX || _board.RefY != s.RefY || _board.RefScale != s.RefScale))
+        {
+            bool other = _board.Reference != s.RefFile;
+            _board.Reference = s.RefFile; _board.RefX = s.RefX; _board.RefY = s.RefY; _board.RefScale = s.RefScale;
+            if (other) Reference = s.RefFile != null ? Images.Load(s.RefFile) : null;
+            SaveBoard(now: true);
+            NotifyReference();
+        }
+        ReferenceSelected = false;
+        if (s.GuidesH != null) Ann.GuidesH = [.. s.GuidesH];
+        if (s.GuidesV != null) Ann.GuidesV = [.. s.GuidesV];
         Refresh();
     }
 
@@ -1164,6 +1295,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
     public void SelectStroke(Segment? s)
     {
         SelectedOrder = s?.Order ?? 0;
+        if (s != null) AdoptBrushOf(s);
         if (s != null && s.Chip >= 0 && s.Chip < Chips.Count && s.Kind != "ornament") { Active = s.Chip; Refresh(); }
     }
 
@@ -1387,7 +1519,7 @@ public sealed partial class AnnotateViewModel : ObservableObject
         ann.State = all ? "done" : "partial";
         try { _main.Annotations.Save(ann); }
         catch (Exception ex) { Dialogs.Error(ex.Message); }
-        int n = LetterExporter.Export(item, ann, _main.FullPath(item.Png), _main.Letters, _main.Settings.Style);
+        int n = LetterExporter.Export(item, ann, item.PathOf(item.Png), _main.Letters, _main.StyleLabelOf(item));
         _main.RefreshCounts();
         return (all, n);
     }

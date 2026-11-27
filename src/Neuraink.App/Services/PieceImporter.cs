@@ -15,8 +15,20 @@ public static class PieceImporter
 {
     public const int ThumbSide = 260;
 
-    /// <summary>Adds one picture; returns its id. Throws with a readable message when the picture cannot be used.</summary>
-    public static int Import(string file, string libraryFolder, IEnumerable<int> usedIds)
+    private static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"];
+    public static bool IsPicture(string file) => Extensions.Contains(Path.GetExtension(file).ToLowerInvariant());
+
+    /// <summary>A piece added: its id, the hash of its ink, and the files made (to take them back if the user cancels).</summary>
+    public sealed record Added(int Id, string Hash, List<string> Files);
+
+    /// <summary>The same picture is in the library already (the same ink, pixel for pixel).</summary>
+    public sealed class DuplicateException(string message) : Exception(message);
+
+    /// <summary>
+    /// Adds one picture. Throws with a readable message when it cannot be used, and <see cref="DuplicateException"/> when the
+    /// same ink is in the library already (<paramref name="knownHashes"/>; the new hash is added to it).
+    /// </summary>
+    public static Added Import(string file, string libraryFolder, IEnumerable<int> usedIds, ISet<string>? knownHashes = null)
     {
         var text = LibraryEditor.CleanName(Path.GetFileNameWithoutExtension(file));
         if (text.Length == 0) throw new InvalidOperationException(Loc.T("Lib.NoName"));
@@ -24,6 +36,8 @@ public static class PieceImporter
 
         var (ink, w, h) = Clean(src);
         if (w == 0) throw new InvalidOperationException(Loc.T("Lib.NoInk"));
+        var hash = InkHash(ink, w, h);
+        if (knownHashes != null && !knownHashes.Add(hash)) throw new DuplicateException(Loc.T("Lib.Duplicate"));
 
         Directory.CreateDirectory(libraryFolder);
         foreach (var d in new[] { "clean_png", "svg", "thumbs" }) Directory.CreateDirectory(Path.Combine(libraryFolder, d));
@@ -44,8 +58,20 @@ public static class PieceImporter
             ["width"] = w.ToString(), ["height"] = h.ToString(),
             ["clean_png"] = png, ["svg"] = svg, ["thumb"] = thumb,
             ["note"] = "added " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            ["hash"] = hash,
         });
-        return id;
+        return new Added(id, hash, [Path.Combine(libraryFolder, "clean_png", name + ".png"), Path.Combine(libraryFolder, "svg", name + ".svg"),
+            Path.Combine(libraryFolder, "thumbs", name + ".jpg")]);
+    }
+
+    /// <summary>The fingerprint of the ink (its size and every pixel): the same picture gives the same hash, whatever its name.</summary>
+    public static string InkHash(bool[] ink, int w, int h)
+    {
+        var bytes = new byte[8 + (ink.Length + 7) / 8];
+        BitConverter.GetBytes(w).CopyTo(bytes, 0);
+        BitConverter.GetBytes(h).CopyTo(bytes, 4);
+        for (int i = 0; i < ink.Length; i++) if (ink[i]) bytes[8 + i / 8] |= (byte)(1 << (i % 8));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..32];
     }
 
     private static BitmapSource? Decode(string file)
