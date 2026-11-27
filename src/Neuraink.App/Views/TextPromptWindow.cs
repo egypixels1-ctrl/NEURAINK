@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Neuraink.App.Services;
+using Neuraink.Core;
 
 namespace Neuraink.App.Views;
 

@@ -1136,13 +1136,13 @@ public partial class AnnotateView : UserControl
             double w = img.PixelWidth, h = img.PixelHeight;
             for (int i = 0; i < _vm.GuidesH.Count; i++)
             {
-                bool sel = _vm.SelectedGuide is { Dir: 'h' } sg && sg.Index == i;
-                Overlay.Children.Add(new Shapes.Line { X1 = -w, X2 = 2 * w, Y1 = _vm.GuidesH[i], Y2 = _vm.GuidesH[i], Stroke = sel ? gs : gb, StrokeThickness = (sel ? 1.6 : 1) * px, IsHitTestVisible = false });
+                bool gsel = _vm.SelectedGuide is { Dir: 'h' } sg && sg.Index == i;
+                Overlay.Children.Add(new Shapes.Line { X1 = -w, X2 = 2 * w, Y1 = _vm.GuidesH[i], Y2 = _vm.GuidesH[i], Stroke = gsel ? gs : gb, StrokeThickness = (gsel ? 1.6 : 1) * px, IsHitTestVisible = false });
             }
             for (int i = 0; i < _vm.GuidesV.Count; i++)
             {
-                bool sel = _vm.SelectedGuide is { Dir: 'v' } sg && sg.Index == i;
-                Overlay.Children.Add(new Shapes.Line { Y1 = -h, Y2 = 2 * h, X1 = _vm.GuidesV[i], X2 = _vm.GuidesV[i], Stroke = sel ? gs : gb, StrokeThickness = (sel ? 1.6 : 1) * px, IsHitTestVisible = false });
+                bool gsel = _vm.SelectedGuide is { Dir: 'v' } sg && sg.Index == i;
+                Overlay.Children.Add(new Shapes.Line { Y1 = -h, Y2 = 2 * h, X1 = _vm.GuidesV[i], X2 = _vm.GuidesV[i], Stroke = gsel ? gs : gb, StrokeThickness = (gsel ? 1.6 : 1) * px, IsHitTestVisible = false });
             }
         }
         // the last cut (Scissors / Knife): a small mark
